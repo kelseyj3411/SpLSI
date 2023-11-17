@@ -11,6 +11,7 @@ from cvxpy import Variable
 from cvxpy.problems.objective import Minimize
 from cvxpy.problems.problem import Problem
 from SpLSI import generate_topic_model as gen_model
+# use pycvxcluster "https://github.com/dx-li/pycvxcluster/tree/main"
 
 def trunc_svd(X, K):
     U, L, VT = svd(X, full_matrices=False)
