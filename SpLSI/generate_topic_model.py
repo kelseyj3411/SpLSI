@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import rbf_kernel
 import networkx as nx
-#from netgraph import Graph
-#from netgraph import get_sugiyama_layout
 
 
 def get_initial_centers(val, centers):
@@ -34,8 +32,8 @@ def sample_MN(p, N):
 def generate_graph(N, n, p, K, r):
     np.random.seed(127)
     coords = np.zeros((n, 2))
-    coords[:, 0] = np.random.uniform(-3, 3, n)
-    coords[:, 1] = np.random.uniform(-3, 3, n)
+    coords[:, 0] = np.random.uniform(0, 1, n)
+    coords[:, 1] = np.random.uniform(0, 1, n)
 
     cluster_obj = KMeans(n_clusters=20, init=coords[get_initial_centers(coords, 20), :], n_init=1)
     grps = cluster_obj.fit_predict(coords)
@@ -90,67 +88,6 @@ def generate_weights(df, K, nearest_n, phi):
     weights = (weights+weights.T)/2  
     # Adj = csr_matrix(weights)
     return weights
-
-def generate_graph_from_weights(df, weights, n):
-    np.random.seed(127)
-    G = nx.Graph()
-    for node in range(n):
-        x = df['x'].iloc[node]
-        y = df['y'].iloc[node]
-        G.add_node(node, pos=(x, y))
-    
-    for node1 in G.nodes:
-        for node2 in G.nodes:
-            if node1 < node2:
-                #pos1 = G.nodes[node1]['pos']
-                #pos2 = G.nodes[node2]['pos']
-                w = weights[node1,node2]
-                #dist = norm(np.array(pos1) - np.array(pos2))
-                if w > 0:
-                    G.add_edge(node1, node2, weight=w)
-    return G
-
-def get_mst_path(G):
-    mst = nx.minimum_spanning_tree(G)
-    path = dict(nx.all_pairs_shortest_path_length(mst))
-    return mst, path
-
-def generate_mst(df, n, K, nearest_n, phi):
-    weights = generate_weights(df, K, nearest_n, phi)
-    G = generate_graph_from_weights(df, weights, n)
-    mst, path = get_mst_path(G)
-    return G, mst, path, weights
-
-def get_parent_node(path, mst, srn, nodenum):
-    neighs = list(mst.adj[nodenum].keys())
-    length_to_srn = [path[neigh][srn] for neigh in neighs]
-    parent = neighs[np.argmin(length_to_srn)]
-    return parent
-
-def get_folds(mst, path, n, plot_tree=True):
-    np.random.seed(127)
-    srn = np.random.choice(range(n),1)[0]
-    print(f"Source node is {srn}")
-
-    fold1 = []
-    fold2 = []
-    colors = []
-    for key, value in path[srn].items():
-        if (value%2)==0:
-            fold1.append(key)
-            colors.append("orange")
-        elif (value%2)==1:
-            fold2.append(key)
-            colors.append("blue")
-        else:
-            colors.append("red")
-    len1 = len(fold1)
-    len2 = len(fold2)
-    print(f"Fold1 size is {len1}")
-    print(f"Fold2 size is {len2}")
-    if plot_tree:
-        nx.draw_kamada_kawai(mst, node_color = colors, node_size=10)
-    return srn, fold1, fold2
 
 def plot_scatter(df):
     unique_groups = df['grp'].unique()
