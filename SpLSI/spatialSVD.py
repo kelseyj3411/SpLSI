@@ -28,15 +28,15 @@ def spatialSVD(
 
     lambd_grid = (lamb_start*np.power(step_size, np.arange(grid_len))).tolist()
 
-    U, L, V = trunc_svd(X, K)
+    U, _, V = trunc_svd(X, K)
     thres = 1
     while thres > eps:
         UUT_old = np.dot(U, U.T)
         VVT_old = np.dot(V, V.T)
 
-        U, lambd = update_U_tilde(X, L, V, weights, folds, path, mst, srn, lambd_grid, n, K)
+        U, lambd = update_U_tilde(X, V, weights, folds, path, mst, srn, lambd_grid, n, K)
         V = update_V_tilde(X, U)
-        L = update_L_tilde(X, U, V)
+        #L = update_L_tilde(X, U, V)
 
         UUT = np.dot(U, U.T)
         VVT = np.dot(V, V.T)
@@ -46,15 +46,16 @@ def spatialSVD(
     return U, lambd
 
 
-def update_U_tilde(X, L, V, weights, folds, path, mst, srn, lambd_grid, n, K):
+def update_U_tilde(X, V, weights, folds, path, mst, srn, lambd_grid, n, K):
     U_best_comb = np.zeros((n,K))
     lambds_best = {}
 
     for j in folds.keys():
-        print(j)
         fold = folds[j]
         X_tilde = interpolate_X(X, folds, j, path, mst, srn)
-        X_j = X_tilde[fold,:]
+        # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
+        #assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
+        X_j = X[fold,:]
         XV = np.dot(X_tilde, V)
 
         best_err = float("inf")
@@ -65,11 +66,14 @@ def update_U_tilde(X, L, V, weights, folds, path, mst, srn, lambd_grid, n, K):
             ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
             ssnal.fit(X=XV, weight_matrix=weights, save_centers=True)
             U_hat = ssnal.centers_.T
-            M = np.dot(np.dot(U_hat, L), V.T)
+            row_sums = norm(U_hat, axis=1, keepdims=True)
+            U_hat = U_hat / row_sums
+            M = np.dot(U_hat, V.T)
             err = norm(X_j-M[fold,:])
             if err < best_err:
                 lambd_best = lambd
                 U_best = U_hat
+                best_err = err
         U_best_comb[fold,:] = U_best[fold,:]
         lambds_best[j] = lambd_best
 
@@ -81,17 +85,22 @@ def update_U_tilde(X, L, V, weights, folds, path, mst, srn, lambd_grid, n, K):
         ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
         ssnal.fit(X=XV, weight_matrix=weights, save_centers=True)
         U_hat_full = ssnal.centers_.T
+        row_sums = norm(U_hat_full, axis=1, keepdims=True)
+        U_hat_full = U_hat_full / row_sums
         err = norm(U_hat_full-U_best_comb)
         errs.append(err)
         if err < best_err:
             lambd_cv = lambd
             U_cv = U_hat_full
+            best_err = err
     Q, R = qr(U_cv)
-    return Q, lambd_cv, errs
+    return Q, lambd_cv
 
 
 def update_V_tilde(X, U_tilde):
     V_hat = np.dot(X.T, U_tilde)
+    row_sums = norm(V_hat, axis=1, keepdims=True)
+    V_hat = V_hat / row_sums
     Q, R = qr(V_hat)
     return Q
 

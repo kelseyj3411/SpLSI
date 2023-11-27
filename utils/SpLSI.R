@@ -49,7 +49,8 @@ generate_data = function(N, n, p, K, r){
   W = matrix(0,K,n)
   for(k in 1:K){
     cluster.size = dim(df[df$grp==k,])[1]
-    alpha = runif(K,0.1,0.3)
+    #alpha = runif(K,0.1,0.3)
+    alpha = c(0.1, 0.15, 0.2)
     # order rows of W so each doc matches cluster assignment
     order = rep(0,K)
     order[(1:K)[-k]] = sample(2:K, K-1)
@@ -72,7 +73,7 @@ generate_data = function(N, n, p, K, r){
   D = apply(D0, 2, sample_mn, N)/N
   df$grp_new = apply(W, 2, which.max)
   
-  return(list(W=W, A=A, D=D, df=df))
+  return(list(W=W, A=A, D=D, D0=D0, df=df))
 }
 
 # SPOC algorithm
@@ -86,7 +87,7 @@ get_weights = function(df, m=5, phi=0.1){
   return(w)
 }
 
-get_U_tilde = function(D, K, w, eps=0.01){
+get_U_tilde = function(D, K, w, eps=0.001){
   # Initialize V0
   s = svds(D,K)
   V_tilde = s$v
@@ -183,7 +184,7 @@ fit_SPOC = function(df, D, W, U, K, w, method = "spatial"){
 }
 
 # RUN
-N = 100
+N = 20
 n = 1000
 p = 30
 K = 3
@@ -278,11 +279,42 @@ sub = paste0("Accuracy/Error:",res_b$acc,",",round(res_b$f.err,2),"(base)"," / "
 grid.arrange(p7,p8,p9,p1,p2,p3,p4,p5,p6, ncol=3,nrow=3,
              top = main, bottom = sub)
 
+# Plot Simplex
+plot_simplx = function(df){
+  p = 
+    ggplot(df)+
+    geom_point(mapping = aes(x=lat, y=lon, color=grp), show.legend = FALSE)+
+    scale_color_viridis(discrete = FALSE, option = "D")+
+    scale_fill_viridis(discrete = FALSE)+
+    theme(legend.position = "none")+
+    #xlim(-0.0355,-0.025)+
+    #ylim(-0.1,0.055)+
+    theme_bw()
+  return(p)}
+simplx = as.data.frame(cbind(df$grp_new, 
+                             U_tilde[,1], U_tilde[,2]))
+colnames(simplx) = c("grp","lat","lon")
+s1 = plot_simplx(simplx)
 
+svd = svds(t(D),K) 
+U = svd$u
+simplx = as.data.frame(cbind(df$grp_new, U[,1], U[,2]))
+colnames(simplx) = c("grp","lat","lon")
+s2 = plot_simplx(simplx)
 
+D0 = topic.data$D0
+svd = svds(t(D0),K) 
+U = svd$u
+simplx = as.data.frame(cbind(df$grp_new, U[,1], U[,2]))
+colnames(simplx) = c("grp","lat","lon")
+s3 = plot_simplx(simplx)
 
+simplx = as.data.frame(cbind(df$grp_new, W[1,], W[2,]))
+colnames(simplx) = c("grp","lat","lon")
+s4 = plot_simplx(simplx)
 
-
+main = "U_SpLSI / U_pLSI / U_oracle"
+grid.arrange(s1,s2,s3, ncol=2, top = main)
 
 
 # Miscell

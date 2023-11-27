@@ -30,7 +30,6 @@ def sample_MN(p, N):
     return np.random.multinomial(N, p, size=1)
 
 def generate_graph(N, n, p, K, r):
-    np.random.seed(127)
     coords = np.zeros((n, 2))
     coords[:, 0] = np.random.uniform(0, 1, n)
     coords[:, 1] = np.random.uniform(0, 1, n)
@@ -45,7 +44,7 @@ def generate_graph(N, n, p, K, r):
 def generate_W(df, N, n, p, K, r):
     W = np.zeros((K, n))
     for k in range(K):
-        alpha = np.random.uniform(0.1, 0.3, K)
+        alpha = np.random.uniform(0.1, 0.5, K)
         cluster_size = df[df['grp'] == k].shape[0]
         order = align_order(k, K)
         inds = df['grp'] == k

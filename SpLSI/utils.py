@@ -23,7 +23,6 @@ def generate_graph_from_weights_(df, weights, n):
     return G
 
 def generate_graph_from_weights(df, weights, n):
-    np.random.seed(127)
     G = nx.Graph()
     for node in range(n):
         x = df['x'].iloc[node]
@@ -60,13 +59,13 @@ def get_parent_node(mst, path, srn, nodenum):
 def interpolate_X(X, folds, foldnum, path, mst, srn):
     fold = folds[foldnum]
     
+    X_tilde = X.copy()
     for node in fold:
         parent = get_parent_node(mst, path, srn, node)
-        X[node,:] = X[parent,:]
-    return X
+        X_tilde[node,:] = X[parent,:]
+    return X_tilde
 
 def get_folds(mst, path, n, plot_tree=False):
-    np.random.seed(127)
     srn = np.random.choice(range(n),1)[0]
     print(f"Source node is {srn}")
 

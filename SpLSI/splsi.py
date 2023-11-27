@@ -50,11 +50,12 @@ class SpLSI(object):
             df, 
             weights
     ):
-        if self.method == "spatial":
-            U = trunc_svd(D.T, K)
-            print("Running vanilla SPOC...")
+        if self.method != "spatial":
+            self.U, _, _ = trunc_svd(D.T, K)
+            print("Running vanilla SVD...")
         
         else:
+            print("Running spatial SVD...")
             self.U, self.lamd = spatialSVD(D, 
                                 K, 
                                 df, 
@@ -65,10 +66,10 @@ class SpLSI(object):
                                 self.eps,
                                 self.verbose
         )
-        
+        print("Running SPOC...")
         n = D.shape[1]
         J = []
-        S = self.preprocess_U(U, K).T
+        S = self.preprocess_U(self.U, K).T
         for t in range(K):
             maxind = np.argmax(norm(S, axis=0))
             s = np.reshape(S[:, maxind], (K, 1))
@@ -76,8 +77,8 @@ class SpLSI(object):
             S = S1
             J.append(maxind) 
 
-        H_hat = U[J, :]
-        self.W_hat = self.get_W_hat(U, H_hat, n, K)
+        H_hat = self.U[J, :]
+        self.W_hat = self.get_W_hat(self.U, H_hat, n, K)
 
         if self.return_anchor_docs:
             self.anchor_indices = J
