@@ -18,32 +18,87 @@ def spatialSVD(
         step_size,
         grid_len,
         eps,
-        verbose
+        verbose,
+        method
 ):
     X = D.T
     n = X.shape[0]
+    p = X.shape[1]
     _, mst, path = generate_mst(df, weights, n)
     srn, fold1, fold2 = get_folds(mst, path, n)
     folds = {0:fold1, 1:fold2}
 
     lambd_grid = (lamb_start*np.power(step_size, np.arange(grid_len))).tolist()
 
-    U, _, V = trunc_svd(X, K)
-    thres = 1
-    while thres > eps:
-        UUT_old = np.dot(U, U.T)
-        VVT_old = np.dot(V, V.T)
+    if method == 'two-step':
+        U, _, V = trunc_svd(X, K)
+        thres = 1
+        while thres > eps:
+            UUT_old = np.dot(U, U.T)
+            VVT_old = np.dot(V, V.T)
 
-        U, lambd = update_U_tilde(X, V, weights, folds, path, mst, srn, lambd_grid, n, K)
-        V = update_V_tilde(X, U)
-        #L = update_L_tilde(X, U, V)
+            U, lambd = update_U_tilde(X, V, weights, folds, path, mst, srn, lambd_grid, n, K)
+            V = update_V_tilde(X, U)
+            #L = update_L_tilde(X, U, V)
 
-        UUT = np.dot(U, U.T)
-        VVT = np.dot(V, V.T)
-        thres = np.max([norm(UUT-UUT_old)**2, norm(VVT-VVT_old)**2])
-        if verbose == 1:
-            print(f"Error is {thres}")
+            UUT = np.dot(U, U.T)
+            VVT = np.dot(V, V.T)
+            thres = np.max([norm(UUT-UUT_old)**2, norm(VVT-VVT_old)**2])
+            if verbose == 1:
+                print(f"Error is {thres}")
+    else:
+        M_tilde, lambd = update_M_tilde(X, weights, folds, path, mst, srn, lambd_grid, n, p)
+        U, _, _ = trunc_svd(M_tilde, K)
+
     return U, lambd
+
+
+def update_M_tilde(X, weights, folds, path, mst, srn, lambd_grid, n, p):
+    M_best_comb = np.zeros((n,p))
+    lambds_best = {}
+
+    for j in folds.keys():
+        fold = folds[j]
+        X_tilde = interpolate_X(X, folds, j, path, mst, srn)
+        # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
+        #assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
+        X_j = X[fold,:]
+
+        best_err = float("inf")
+        M_best = None
+        lambd_best = 0
+        
+        for lambd in lambd_grid:
+            ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
+            ssnal.fit(X=X_tilde, weight_matrix=weights, save_centers=True)
+            M_hat = ssnal.centers_.T
+            row_sums = norm(M_hat, axis=1, keepdims=True)
+            M_hat = M_hat / row_sums
+            err = norm(X_j-M_hat[fold,:])
+            if err < best_err:
+                lambd_best = lambd
+                M_best = M_hat
+                best_err = err
+        M_best_comb[fold,:] = M_best[fold,:]
+        lambds_best[j] = lambd_best
+
+    errs = []
+    best_err = float("inf")
+    lambd_cv = 0
+    for lambd in lambd_grid:
+        ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
+        ssnal.fit(X=X, weight_matrix=weights, save_centers=True)
+        M_hat_full = ssnal.centers_.T
+        row_sums = norm(M_hat_full, axis=1, keepdims=True)
+        M_hat_full = M_hat_full / row_sums
+        err = norm(M_hat_full-M_best_comb)
+        errs.append(err)
+        if err < best_err:
+            lambd_cv = lambd
+            M_cv = M_hat_full
+            best_err = err
+    Q, R = qr(M_cv)
+    return Q, lambd_cv
 
 
 def update_U_tilde(X, V, weights, folds, path, mst, srn, lambd_grid, n, K):
@@ -68,8 +123,8 @@ def update_U_tilde(X, V, weights, folds, path, mst, srn, lambd_grid, n, K):
             U_hat = ssnal.centers_.T
             row_sums = norm(U_hat, axis=1, keepdims=True)
             U_hat = U_hat / row_sums
-            M = np.dot(U_hat, V.T)
-            err = norm(X_j-M[fold,:])
+            E = np.dot(U_hat, V.T)
+            err = norm(X_j-E[fold,:])
             if err < best_err:
                 lambd_best = lambd
                 U_best = U_hat

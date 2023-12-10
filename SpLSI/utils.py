@@ -126,3 +126,4 @@ def inverse_L(L):
     inv_d[non_zero] = 1.0/d[non_zero]
     inv = np.diag(inv_d)
     return L
+

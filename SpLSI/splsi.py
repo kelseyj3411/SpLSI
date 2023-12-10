@@ -28,6 +28,7 @@ class SpLSI(object):
             grid_len = 100,
             eps = 1e-06,
             method = "spatial",
+            step = "two-step",
             return_anchor_docs = True,
             verbose = 1
     ):
@@ -43,6 +44,7 @@ class SpLSI(object):
         self.method = method
         self.return_anchor_docs = return_anchor_docs
         self.verbose = verbose
+        self.step = step
         
     def fit(self, 
             D, 
@@ -64,7 +66,8 @@ class SpLSI(object):
                                 self.step_size,
                                 self.grid_len,
                                 self.eps,
-                                self.verbose
+                                self.verbose,
+                                self.step
         )
         print("Running SPOC...")
         n = D.shape[1]
