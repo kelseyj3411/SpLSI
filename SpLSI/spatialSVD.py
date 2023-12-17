@@ -29,6 +29,7 @@ def spatialSVD(
     folds = {0:fold1, 1:fold2}
 
     lambd_grid = (lamb_start*np.power(step_size, np.arange(grid_len))).tolist()
+    lambd_grid.insert(0, 1e-06)
 
     if method == 'two-step':
         U, _, V = trunc_svd(X, K)

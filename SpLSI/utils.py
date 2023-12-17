@@ -5,7 +5,7 @@ import numpy as np
 import networkx as nx
 
 def generate_graph_from_weights_(df, weights, n):
-    np.random.seed(127)
+    #np.random.seed(127)
     G = nx.Graph()
     
     for node in range(n):

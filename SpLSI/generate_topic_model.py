@@ -55,6 +55,25 @@ def generate_W(df, N, n, p, K, r):
         W[:, cano_ind] = np.eye(K)[0, :].reshape(K,1)
     return W
 
+def generate_W_strong(df, N, n, p, K, r):
+    W = np.zeros((K, n))
+    for k in range(K):
+        alpha = np.random.uniform(0.1, 0.5, K)
+        alpha = np.random.dirichlet(alpha)
+        c = df[df['grp'] == k].shape[0]
+        order = align_order(k, K)
+        weight = reorder_with_noise(alpha, order, K, r=0.0)
+        inds = df['grp'] == k
+        W[:, inds] = np.column_stack([weight]*c)+np.abs(np.random.normal(scale=0.03, size = c*K).reshape((K,c)))
+
+        # generate pure doc 
+        cano_ind = np.random.choice(np.where(inds)[0], 1)
+        W[:, cano_ind] = np.eye(K)[0, :].reshape(K,1)
+
+    col_sums = np.sum(W, axis=0)
+    W = W / col_sums
+    return W
+
 def generate_A(df, N, n, p, K, r):
     A = np.random.uniform(0, 1, size=(p, K))
 
@@ -64,9 +83,12 @@ def generate_A(df, N, n, p, K, r):
     A = np.apply_along_axis(lambda x: x / np.sum(x), 0, A)
     return A
 
-def generate_data(N, n, p, K, r):
+def generate_data(N, n, p, K, r, method = "strong"):
     df = generate_graph(N, n, p , K, r)
-    W = generate_W(df, N, n, p , K, r)
+    if method == "strong":
+        W = generate_W_strong(df, N, n, p, K, r)
+    else:
+        W = generate_W(df, N, n, p , K, r)
     A = generate_A(df, N, n, p , K, r)
     D0 = np.dot(A, W)
     D = np.apply_along_axis(sample_MN, 0, D0, N).reshape(p,n)
