@@ -34,11 +34,12 @@ def generate_graph(N, n, p, K, r):
     coords[:, 0] = np.random.uniform(0, 1, n)
     coords[:, 1] = np.random.uniform(0, 1, n)
 
-    cluster_obj = KMeans(n_clusters=20, init=coords[get_initial_centers(coords, 20), :], n_init=1)
+    cluster_obj = KMeans(n_clusters=30, init=coords[get_initial_centers(coords, 30), :], n_init=1)
     grps = cluster_obj.fit_predict(coords)
 
     df = pd.DataFrame(coords, columns=['x','y'])
     df['grp'] = grps % K
+    df['grp_blob'] = grps
     return df
 
 def generate_W(df, N, n, p, K, r):
@@ -57,14 +58,40 @@ def generate_W(df, N, n, p, K, r):
 
 def generate_W_strong(df, N, n, p, K, r):
     W = np.zeros((K, n))
-    for k in range(K):
+    for k in df['grp'].unique():
+        for b in df[df['grp'] == k]['grp_blob'].unique():
+            alpha = np.random.uniform(0.1, 0.5, K)
+            alpha = np.random.dirichlet(alpha)
+            subset_df = df[(df['grp'] == k) & (df['grp_blob'] == b)]
+
+            c = subset_df.shape[0]
+            order = align_order(k, K)
+            weight = reorder_with_noise(alpha, order, K, r)
+            inds = (df['grp'] == k) & (df['grp_blob'] == b)
+            W[:, inds] = np.column_stack([weight]*c)+np.abs(np.random.normal(scale=0.03, size = c*K).reshape((K,c)))
+
+        # generate pure doc 
+        cano_ind = np.random.choice(np.where(inds)[0], 1)
+        W[:, cano_ind] = np.eye(K)[0, :].reshape(K,1)
+
+    col_sums = np.sum(W, axis=0)
+    W = W / col_sums
+    return W
+
+def generate_W_strong_ver2(df, N, n, p, K, r):
+    W = np.zeros((K, n))
+    for k in df['grp'].unique():
         alpha = np.random.uniform(0.1, 0.5, K)
         alpha = np.random.dirichlet(alpha)
-        c = df[df['grp'] == k].shape[0]
-        order = align_order(k, K)
-        weight = reorder_with_noise(alpha, order, K, r=0.0)
-        inds = df['grp'] == k
-        W[:, inds] = np.column_stack([weight]*c)+np.abs(np.random.normal(scale=0.03, size = c*K).reshape((K,c)))
+        for b in df[df['grp'] == k]['grp_blob'].unique():
+            alpha_blob = alpha + np.abs(np.random.normal(scale=0.03))
+            subset_df = df[(df['grp'] == k) & (df['grp_blob'] == b)]
+
+            c = subset_df.shape[0]
+            order = align_order(k, K)
+            weight = reorder_with_noise(alpha_blob, order, K, r)
+            inds = (df['grp'] == k) & (df['grp_blob'] == b)
+            W[:, inds] = np.column_stack([weight]*c)+np.abs(np.random.normal(scale=0.01, size = c*K).reshape((K,c)))
 
         # generate pure doc 
         cano_ind = np.random.choice(np.where(inds)[0], 1)
