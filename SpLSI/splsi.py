@@ -23,6 +23,7 @@ class SpLSI(object):
 
     def __init__(
             self,
+            lambd = None, 
             lamb_start = 0.01,
             step_size = 1.15,
             grid_len = 100,
@@ -37,6 +38,7 @@ class SpLSI(object):
         -----------
 
         """
+        self.lambd = lambd
         self.lamb_start = lamb_start
         self.step_size = step_size
         self.grid_len = grid_len
@@ -54,14 +56,16 @@ class SpLSI(object):
     ):
         if self.method != "spatial":
             self.U, _, _ = trunc_svd(D.T, K)
-            print("Running vanilla SVD...")
+            #print("Running vanilla SVD...")
         
         else:
-            print("Running spatial SVD...")
-            self.U, self.lamd = spatialSVD(D, 
+            #print("Running spatial SVD...")
+            self.U, self.L, self.lambd, self.lambd_errs = spatialSVD(
+                                D, 
                                 K, 
                                 df, 
                                 weights,
+                                self.lambd,
                                 self.lamb_start,
                                 self.step_size,
                                 self.grid_len,
@@ -69,7 +73,7 @@ class SpLSI(object):
                                 self.verbose,
                                 self.step
         )
-        print("Running SPOC...")
+        #print("Running SPOC...")
         n = D.shape[1]
         J = []
         S = self.preprocess_U(self.U, K).T

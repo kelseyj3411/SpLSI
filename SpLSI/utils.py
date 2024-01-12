@@ -56,18 +56,18 @@ def get_parent_node(mst, path, srn, nodenum):
     parent = neighs[np.argmin(length_to_srn)]
     return parent
 
-def interpolate_X(X, folds, foldnum, path, mst, srn):
+def interpolate_X(X, G, folds, foldnum, path, mst, srn):
     fold = folds[foldnum]
     
     X_tilde = X.copy()
     for node in fold:
-        parent = get_parent_node(mst, path, srn, node)
-        X_tilde[node,:] = X[parent,:]
+        neighs = list(G.neighbors(node))
+        X_tilde[node,:] = np.mean(X[neighs,:], axis=0)
     return X_tilde
 
 def get_folds(mst, path, n, plot_tree=False):
     srn = np.random.choice(range(n),1)[0]
-    print(f"Source node is {srn}")
+    #print(f"Source node is {srn}")
 
     fold1 = []
     fold2 = []
