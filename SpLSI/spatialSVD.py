@@ -33,7 +33,7 @@ def spatialSVD(
     lambd_grid.insert(0, 1e-06)
 
     if method == 'two-step':
-        U, L, V = trunc_svd(X, K)
+        U, _, V = trunc_svd(X, K)
 
         thres = 1
         niter = 0
@@ -168,19 +168,18 @@ def update_U_tilde(X, V, G, weights, folds, path, mst, srn, lambd_grid, n, K):
     Q, R = qr(UL_hat_full)
     return Q, lambd_cv, lambd_errs
 
-def update_U_tilde_old(X, L, V, weights, folds, path, mst, srn, lambd_grid, n, K):
+def update_U_tilde_old(X, V, G, weights, folds, path, mst, srn, lambd_grid, n, K):
     U_best_comb = np.zeros((n,K))
     lambds_best = []
     lambd_errs = {'fold_errors': {}, 'final_errors': []}
-    L_inv = np.diag(1/L.diagonal())
-    XVL_inv = np.dot(np.dot(X, V),L_inv)
+    XV = np.dot(X, V)
 
     for j in folds.keys():
         fold = folds[j]
-        X_tilde = interpolate_X(X, folds, j, path, mst, srn)
+        X_tilde = interpolate_X(X, G, folds, j, path, mst, srn)
         # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
         #assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
-        XV_tilde = np.dot(np.dot(X_tilde, V), L_inv)
+        XV_tilde = np.dot(X_tilde, V)
         X_j = X[fold,:]
 
         errs = []
@@ -208,7 +207,7 @@ def update_U_tilde_old(X, L, V, weights, folds, path, mst, srn, lambd_grid, n, K
     lambd_cv = 0
     for lambd in lambd_grid:
         ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
-        ssnal.fit(X=XVL_inv, weight_matrix=weights, save_centers=True)
+        ssnal.fit(X=XV, weight_matrix=weights, save_centers=True)
         U_hat_full = ssnal.centers_.T
         E_best = np.dot(U_best, V.T)
         E_full = np.dot(U_hat_full, V.T)
@@ -220,7 +219,7 @@ def update_U_tilde_old(X, L, V, weights, folds, path, mst, srn, lambd_grid, n, K
             best_final_err = final_err
     lambd_errs['final_errors'] = final_errs
 
-    Q, R = qr(U_hat_full)
+    Q, R = qr(U_cv)
     return Q, lambd_cv, lambd_errs
 
 def update_V_L_tilde(X, U_tilde):

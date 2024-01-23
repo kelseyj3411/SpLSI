@@ -62,6 +62,7 @@ def interpolate_X(X, G, folds, foldnum, path, mst, srn):
     X_tilde = X.copy()
     for node in fold:
         neighs = list(G.neighbors(node))
+        neighs = list(set(neighs) - set(fold))
         X_tilde[node,:] = np.mean(X[neighs,:], axis=0)
     return X_tilde
 
