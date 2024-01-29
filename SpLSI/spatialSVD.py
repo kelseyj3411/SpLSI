@@ -142,10 +142,17 @@ def update_U_tilde(X, V, G, weights, folds, path, mst, srn, lambd_grid, n, K):
         best_err = float("inf")
         UL_best = None
         lambd_best = 0
+
+        ssnal = pycvxcluster.pycvxclt.SSNAL(verbose=0)
         
-        for lambd in lambd_grid:
-            ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
-            ssnal.fit(X=XV_tilde, weight_matrix=weights, save_centers=True)
+        for fitn, lambd in enumerate(lambd_grid):
+            #ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
+            ssnal.gamma = lambd
+            ssnal.fit(X=XV_tilde, weight_matrix=weights, save_centers=True, save_labels = False, recalculate_weights=(fitn == 0))
+            ssnal.kwargs['x0'] = ssnal.centers_
+            ssnal.kwargs['y0'] = ssnal.y_
+            ssnal.kwargs['z0'] = ssnal.z_
+            #ssnal.admm_iter = 0
             UL_hat = ssnal.centers_.T
             E = np.dot(UL_hat, V.T)
             err = norm(X_j-E[fold,:])
