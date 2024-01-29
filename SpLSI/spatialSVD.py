@@ -5,14 +5,14 @@ import networkx as nx
 
 from SpLSI.utils import *
 sys.path.append('./SpLSI/pycvxcluster/src/')
-import pycvxcluster.pycvxclt
+import pycvxcluster.pycvxcluster
 # use pycvxcluster from "https://github.com/dx-li/pycvxcluster/tree/main"
 
 
 def spatialSVD(
-        D,
+        X,
         K, 
-        df,
+        edge_df,
         weights,
         lambd_fixed,
         lamb_start,
@@ -22,11 +22,10 @@ def spatialSVD(
         verbose,
         method
 ):
-    X = D.T
     n = X.shape[0]
     p = X.shape[1]
-    G, mst, path = generate_mst(df, weights, n)
-    srn, fold1, fold2 = get_folds(mst, path, n)
+    G, mst = get_mst(edge_df)
+    srn, fold1, fold2 = get_folds(mst)
     folds = {0:fold1, 1:fold2}
 
     lambd_grid = (lamb_start*np.power(step_size, np.arange(grid_len))).tolist()
@@ -42,7 +41,7 @@ def spatialSVD(
             VVT_old = np.dot(V, V.T)
 
             if lambd_fixed is None:
-                U, lambd, lambd_errs = update_U_tilde(X, V, G, weights, folds, path, mst, srn, lambd_grid, n, K)
+                U, lambd, lambd_errs = update_U_tilde(X, V, G, weights, folds, lambd_grid, n, K)
                 V, L = update_V_L_tilde(X, U)
             else:
                 U, lambd, lambd_errs = update_U_tilde_nocv(X, V, weights, lambd_fixed)
@@ -55,7 +54,7 @@ def spatialSVD(
             if verbose == 1:
                 print(f"Error is {thres}")
     else:
-        M_tilde, lambd = update_M_tilde(X, weights, folds, path, mst, srn, lambd_grid, n, p)
+        M_tilde, lambd = update_M_tilde(X, G, weights, folds, lambd_grid, n, p)
         U, _, _ = trunc_svd(M_tilde, K)
 
     print(f"SpatialSVD ran for {niter} steps.")
@@ -63,17 +62,19 @@ def spatialSVD(
     return U, L, lambd, lambd_errs
 
 
-def update_M_tilde(X, weights, folds, path, mst, srn, lambd_grid, n, p):
+def update_M_tilde(X, G, weights, folds, lambd_grid, n, p):
     M_best_comb = np.zeros((n,p))
     lambds_best = {}
+    lambd_errs = {'fold_errors': {}, 'final_errors': []}
 
     for j in folds.keys():
         fold = folds[j]
-        X_tilde = interpolate_X(X, folds, j, path, mst, srn)
+        X_tilde = interpolate_X(X, G, folds, j)
         # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
         #assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
         X_j = X[fold,:]
 
+        errs = []
         best_err = float("inf")
         M_best = None
         lambd_best = 0
@@ -82,38 +83,29 @@ def update_M_tilde(X, weights, folds, path, mst, srn, lambd_grid, n, p):
             ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
             ssnal.fit(X=X_tilde, weight_matrix=weights, save_centers=True)
             M_hat = ssnal.centers_.T
-            row_sums = norm(M_hat, axis=1, keepdims=True)
-            M_hat = M_hat / row_sums
             err = norm(X_j-M_hat[fold,:])
             if err < best_err:
                 lambd_best = lambd
                 M_best = M_hat
                 best_err = err
+        lambd_errs['fold_errors'][j] = errs
         M_best_comb[fold,:] = M_best[fold,:]
-        lambds_best[j] = lambd_best
+        lambds_best.append(lambd_best)
 
-    errs = []
-    best_err = float("inf")
-    lambd_cv = 0
-    for lambd in lambd_grid:
-        ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
-        ssnal.fit(X=X, weight_matrix=weights, save_centers=True)
-        M_hat_full = ssnal.centers_.T
-        row_sums = norm(M_hat_full, axis=1, keepdims=True)
-        M_hat_full = M_hat_full / row_sums
-        err = norm(M_hat_full-M_best_comb)
-        errs.append(err)
-        if err < best_err:
-            lambd_cv = lambd
-            M_cv = M_hat_full
-            best_err = err
-    Q, R = qr(M_cv)
-    return Q, lambd_cv
+    cv_errs = np.add(lambd_errs['fold_errors'][0],lambd_errs['fold_errors'][1])
+    lambd_cv = lambd_grid[np.argmin(cv_errs)]
+
+    ssnal = pycvxcluster.pycvxcluster.SSNAL(gamma=lambd_cv, verbose=0)
+    ssnal.fit(X=X, weight_matrix=weights, save_centers=True)
+    M_hat_full = ssnal.centers_.T
+
+    Q, R = qr(M_hat_full)
+    return Q, lambd_cv, lambd_errs
 
 
 def update_U_tilde_nocv(X, V, weights, lambd):
     XV = np.dot(X, V)
-    ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
+    ssnal = pycvxcluster.pycvxcluster.SSNAL(gamma=lambd, verbose=0)
     ssnal.fit(X=XV, weight_matrix=weights, save_centers=True)
 
     U_hat = ssnal.centers_.T
@@ -124,7 +116,7 @@ def update_U_tilde_nocv(X, V, weights, lambd):
     return Q, lambd, err
 
 
-def update_U_tilde(X, V, G, weights, folds, path, mst, srn, lambd_grid, n, K):
+def update_U_tilde(X, V, G, weights, folds, lambd_grid, n, K):
     UL_best_comb = np.zeros((n,K))
     lambds_best = []
     lambd_errs = {'fold_errors': {}, 'final_errors': []}
@@ -132,7 +124,7 @@ def update_U_tilde(X, V, G, weights, folds, path, mst, srn, lambd_grid, n, K):
 
     for j in folds.keys():
         fold = folds[j]
-        X_tilde = interpolate_X(X, G, folds, j, path, mst, srn)
+        X_tilde = interpolate_X(X, G, folds, j)
         # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
         #assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
         XV_tilde = np.dot(X_tilde, V)
