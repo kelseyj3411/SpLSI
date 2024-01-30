@@ -1,62 +1,28 @@
 from numpy.linalg import svd, norm
 from scipy.optimize import linear_sum_assignment
-from scipy.sparse import csr_matrix
 import numpy as np
 import networkx as nx
 
-def generate_graph_from_weights_(df, weights, n):
-    #np.random.seed(127)
-    G = nx.Graph()
-    
-    for node in range(n):
-        x = df['x'].iloc[node]
-        y = df['y'].iloc[node]
-        G.add_node(node, pos=(x, y))
-
-    rows, cols = weights.nonzero()
-
-    for i, j in zip(rows, cols):
-        if i < j:
-            w = weights[i, j]
-            if w > 0:
-                G.add_edge(i, j, weight=w)
-    return G
-
-def generate_graph_from_weights(df, weights, n):
-    G = nx.Graph()
-    for node in range(n):
-        x = df['x'].iloc[node]
-        y = df['y'].iloc[node]
-        G.add_node(node, pos=(x, y))
-    
-    for node1 in G.nodes:
-        for node2 in G.nodes:
-            if node1 < node2:
-                #pos1 = G.nodes[node1]['pos']
-                #pos2 = G.nodes[node2]['pos']
-                w = weights[node1,node2]
-                #dist = norm(np.array(pos1) - np.array(pos2))
-                if w > 0:
-                    G.add_edge(node1, node2, weight=w)
-    return G
-
-def get_mst_path(G):
+def get_mst(edge_df):
+    G = nx.from_pandas_edgelist(edge_df, 'src', 'tgt')
+    connected_subgraphs = list(nx.connected_components(G))
     mst = nx.minimum_spanning_tree(G)
-    path = dict(nx.all_pairs_shortest_path_length(mst))
-    return mst, path
+    if len(connected_subgraphs) > 1:
+        raise ValueError("Graph is not connected.")
+    return G, mst
 
-def generate_mst(df, weights, n):
-    G = generate_graph_from_weights(df, weights, n)
-    mst, path = get_mst_path(G)
-    return G, mst, path
+def get_shortest_paths(mst, srn):
+    shortest_paths = dict(nx.shortest_path_length(mst, source=srn))
+    return shortest_paths
 
-def get_parent_node(mst, path, srn, nodenum):
-    neighs = list(mst[nodenum].keys())
-    length_to_srn = [path[neigh][srn] for neigh in neighs]
-    parent = neighs[np.argmin(length_to_srn)]
-    return parent
+def get_folds(mst):
+    srn = np.random.choice(mst.nodes)
+    path = get_shortest_paths(mst, srn)
+    fold1 = [key for key, value in path.items() if value % 2 == 0]
+    fold2 = [key for key, value in path.items() if value % 2 == 1]
+    return srn, fold1, fold2
 
-def interpolate_X(X, G, folds, foldnum, path, mst, srn):
+def interpolate_X(X, G, folds, foldnum):
     fold = folds[foldnum]
     
     X_tilde = X.copy()
@@ -66,32 +32,38 @@ def interpolate_X(X, G, folds, foldnum, path, mst, srn):
         X_tilde[node,:] = np.mean(X[neighs,:], axis=0)
     return X_tilde
 
-def get_folds(mst, path, n, plot_tree=False):
-    srn = np.random.choice(range(n),1)[0]
-    #print(f"Source node is {srn}")
-
-    fold1 = []
-    fold2 = []
-    colors = []
-    for key, value in path[srn].items():
-        if (value%2)==0:
-            fold1.append(key)
-            colors.append("orange")
-        elif (value%2)==1:
-            fold2.append(key)
-            colors.append("blue")
-        else:
-            colors.append("red")
-    if plot_tree:
-        nx.draw_kamada_kawai(mst, node_color = colors, node_size=10)
-    return srn, fold1, fold2
-
 def trunc_svd(X, K):
     U, L, VT = svd(X, full_matrices=False)
     U_k = U[:, :K]
     L_k = np.diag(L[:K])
     VT_k = VT[:K, :]
     return U_k, L_k, VT_k.T
+
+def normaliza_coords(coords):
+    """
+    Input: pandas dataframe (n x 2) of x,y coordinates
+    Output: pandas dataframe (n x 2) of normalizaed (0,1) x,y coordinates
+    """
+    minX = min(coords['x'])
+    maxX = max(coords['x'])
+    minY = min(coords['y'])
+    maxY = max(coords['y'])
+    diaglen = np.sqrt((minX-maxX)**2+(minY-maxY)**2)
+    coords['x'] = (coords['x']-minX)/diaglen
+    coords['y'] = (coords['y']-minY)/diaglen
+    return coords.values
+
+def dist_to_weight(df, coords, phi):
+    """
+    Input: 
+    - df: pandas dataframe (n x 2) of src, dst nodes 
+    - coords: pandas dataframe (n x 2) of normalizaed (0,1) x,y coordinates
+    - phi: weight parameter
+    Ouput: pandas dataframe (n x 3) of src, dst, squared exponential kernel distance
+    """
+    diff = coords.loc[df['src']].values-coords.loc[df['dst']].values
+    w =  np.exp(-0.1 * np.apply_along_axis(norm, 1, diff)**2)
+    return w
 
 def proj_simplex(v):
     n = len(v)
@@ -111,9 +83,9 @@ def get_component_mapping(stats_1, stats_2):
     P[row_ind, col_ind] = 1
     return P
 
-def get_accuracy(df, n, W_hat):
+def get_accuracy(coords_df, n, W_hat):
     assgn = np.argmax(W_hat, axis=1)
-    accuracy = np.sum(assgn == df['grp'].values) / n
+    accuracy = np.sum(assgn == coords_df['grp'].values) / n
     return accuracy
 
 def get_F_err(W, W_hat):
