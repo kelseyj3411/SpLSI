@@ -8,7 +8,6 @@ sys.path.append('./pycvxcluster/src/')
 import pycvxcluster.pycvxcluster
 # use pycvxcluster from "https://github.com/dx-li/pycvxcluster/tree/main"
 
-from multiprocessing import Pool
 
 def spatialSVD(
         X,
@@ -123,17 +122,41 @@ def update_U_tilde(X, V, G, weights, folds, lambd_grid, n, K):
     lambd_errs = {'fold_errors': {}, 'final_errors': []}
     XV = np.dot(X, V)
 
+    for j in folds.keys():
+        fold = folds[j]
+        X_tilde = interpolate_X(X, G, folds, j)
+        # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
+        #assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
+        XV_tilde = np.dot(X_tilde, V)
+        X_j = X[fold,:]
 
+        errs = []
+        best_err = float("inf")
+        UL_best = None
+        lambd_best = 0
 
-    with Pool() as p:
-        results = p.starmap(lambda_search, [(j, folds, X, V, G, weights, path, mst, srn, lambd_grid) for j in folds.keys()])
-    #results = ray.get([lambda_search.remote(j) for j in folds.keys()])
-    for j, errs, UL_best, lambd_best in results:
-
+        ssnal = pycvxcluster.pycvxcluster.SSNAL(verbose=0)
+        
+        for fitn, lambd in enumerate(lambd_grid):
+            #ssnal = pycvxcluster.pycvxclt.SSNAL(gamma=lambd, verbose=0)
+            ssnal.gamma = lambd
+            ssnal.fit(X=XV_tilde, weight_matrix=weights, save_centers=True, save_labels = False, recalculate_weights=(fitn == 0))
+            ssnal.kwargs['x0'] = ssnal.centers_
+            ssnal.kwargs['y0'] = ssnal.y_
+            ssnal.kwargs['z0'] = ssnal.z_
+            #ssnal.admm_iter = 0
+            UL_hat = ssnal.centers_.T
+            E = np.dot(UL_hat, V.T)
+            err = norm(X_j-E[fold,:])
+            errs.append(err)
+            if err < best_err:
+                lambd_best = lambd
+                UL_best = UL_hat
+                best_err = err
         lambd_errs['fold_errors'][j] = errs
-        UL_best_comb[folds[j],:] = UL_best[folds[j],:]
+        UL_best_comb[fold,:] = UL_best[fold,:]
         lambds_best.append(lambd_best)
-    
+
     cv_errs = np.add(lambd_errs['fold_errors'][0],lambd_errs['fold_errors'][1])
     lambd_cv = lambd_grid[np.argmin(cv_errs)]
 
@@ -143,36 +166,6 @@ def update_U_tilde(X, V, G, weights, folds, lambd_grid, n, K):
 
     Q, R = qr(UL_hat_full)
     return Q, lambd_cv, lambd_errs
-def lambda_search(j, folds, X, V, G, weights, path, mst, srn, lambd_grid):
-    fold = folds[j]
-    X_tilde = interpolate_X(X, G, folds, j, path, mst, srn)
-    # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
-    #assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
-    XV_tilde = np.dot(X_tilde, V)
-    X_j = X[fold,:]
-
-    errs = []
-    best_err = float("inf")
-    UL_best = None
-    lambd_best = 0
-
-    ssnal = pycvxcluster.pycvxclt.SSNAL(verbose=0)
-    
-    for fitn, lambd in enumerate(lambd_grid):
-        ssnal.gamma = lambd
-        ssnal.fit(X=XV_tilde, weight_matrix=weights, save_centers=True, save_labels = False, recalculate_weights=(fitn == 0))
-        ssnal.kwargs['x0'] = ssnal.centers_
-        ssnal.kwargs['y0'] = ssnal.y_
-        ssnal.kwargs['z0'] = ssnal.z_
-        UL_hat = ssnal.centers_.T
-        E = np.dot(UL_hat, V.T)
-        err = norm(X_j-E[fold,:])
-        errs.append(err)
-        if err < best_err:
-            lambd_best = lambd
-            UL_best = UL_hat
-            best_err = err
-    return j, errs, UL_best, lambd_best
 
 def update_U_tilde_old(X, V, G, weights, folds, path, mst, srn, lambd_grid, n, K):
     U_best_comb = np.zeros((n,K))
