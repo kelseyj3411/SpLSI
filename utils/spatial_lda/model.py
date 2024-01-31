@@ -11,6 +11,7 @@ from tqdm.auto import tqdm
 
 import utils.spatial_lda.admm as admm
 from utils.spatial_lda.online_lda import LatentDirichletAllocation
+from utils.spatial_lda.featurization import make_merged_difference_matrices
 
 
 def _update_xi(counts, diff_matrix, diff_penalty, sample_id, verbosity=0, max_iter=15,
@@ -68,10 +69,11 @@ def _update_xis(sample_features, difference_matrices, difference_penalty, gamma,
             # convert into a list of keyword dictionaries
             kw_tasks = [{k: v for k, v in zip(tasks.keys(), values)}
                         for values in list(zip(*tasks.values()))]
-            results = list(tqdm(pool.imap(_wrap_update_xi, kw_tasks),
-                                total=len(unique_idxs),
-                                position=1,
-                                desc='Update xi'))
+            #results = list(tqdm(pool.imap(_wrap_update_xi, kw_tasks),
+            #                    total=len(unique_idxs),
+            #                    position=1,
+            #                    desc='Update xi'))
+            results = list(pool.imap(_wrap_update_xi, kw_tasks))
             new_xis = np.concatenate(results)
     else:
         for sample_idx in np.unique(sample_idxs):
@@ -93,6 +95,34 @@ def _update_xis(sample_features, difference_matrices, difference_penalty, gamma,
                                               threshold=threshold)
     return new_xis
 
+def run_simulation(X, K, coords_df, difference_penalty=0.25,
+          max_primal_dual_iter=400, max_dirichlet_iter=20, max_dirichlet_ls_iter=10,
+          max_lda_iter=5, max_admm_iter=15, n_iters=3, n_parallel_processes=2, verbosity=0,
+          primal_dual_mu=2, admm_rho=1.0, primal_tol=1e-3, threshold=None):
+    row_ind = [('cell',i) for i in range(1000)]
+    features = pd.DataFrame(X, index = row_ind)
+    coords_df_ = {'cell': coords_df}
+    difference_matrices = make_merged_difference_matrices(features, coords_df_, 'x','y')
+
+    print("Runing SLDA...")
+    spl_lda = train(sample_features=features,
+                    difference_matrices=difference_matrices,
+                    n_topics=K,
+                    difference_penalty=difference_penalty,
+                    max_primal_dual_iter=max_primal_dual_iter,
+                    max_dirichlet_iter=max_dirichlet_iter,
+                    max_dirichlet_ls_iter = max_dirichlet_ls_iter,
+                    max_lda_iter = max_lda_iter,
+                    max_admm_iter = max_admm_iter,
+                    n_iters=n_iters,
+                    n_parallel_processes=n_parallel_processes,
+                    verbosity=verbosity,
+                    primal_dual_mu = primal_dual_mu,
+                    admm_rho = admm_rho,
+                    primal_tol=primal_tol,
+                    threshold=threshold)
+    spl_lda.What = spl_lda.topic_weights.values
+    return spl_lda
 
 def train(sample_features, difference_matrices, n_topics, difference_penalty=1,
           max_primal_dual_iter=400, max_dirichlet_iter=20, max_dirichlet_ls_iter=10,
