@@ -100,3 +100,21 @@ def inverse_L(L):
     inv = np.diag(inv_d)
     return L
 
+def get_CHAOS(W, nodes, edge_df, coord_df, n, K):
+    d_ij = 0
+    min_indices = edge_df.groupby('src')['distance'].idxmin().values
+    edge_df = edge_df.assign(
+        normalized_distance = np.apply_along_axis(norm, 1, coord_df.loc[edge_df['src']].values - coord_df.loc[edge_df['tgt']].values))
+    src_nodes = edge_df['src'][min_indices]
+    dst_nodes = edge_df['tgt'][min_indices]
+    distances = edge_df['normalized_distance'][min_indices]
+    nodes = np.asarray(nodes)
+    for k in range(K):
+        K_nodes = nodes[np.argmax(W, axis=1)==k]
+        src = np.isin(src_nodes, K_nodes)
+        dst = np.isin(dst_nodes, K_nodes)
+        d_ijk = np.sum(distances[src & dst])
+        d_ij += d_ijk
+    d_ij = d_ij/n
+    return d_ij
+
