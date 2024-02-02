@@ -77,16 +77,16 @@ def run_simul(nsim, N_vals, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_start 
 
             results.append({
                 'N': N,
-                'vanilla_err': err_acc_spl_v[0],
-                'vanilla_acc': err_acc_spl_v[1],
+                'plsi_err': err_acc_spl_v[0],
+                'plsi_acc': err_acc_spl_v[1],
                 'splsi_err': err_acc_spl_splsi[0],
                 'splsi_acc': err_acc_spl_splsi[1],
                 'slda_err': err_acc_spl_slda[0],
                 'slda_acc': err_acc_spl_slda[1],
-                'time_v': time_v,
+                'time_plsi': time_v,
                 'time_splsi': time_splsi,
                 'time_slda': time_slda,
-                'model_v': model_v,
+                'model_plsi': model_v,
                 'model_splsi': model_splsi,
                 'model_slda': model_slda,
                 'spatial_lambd': model_splsi.lambd
