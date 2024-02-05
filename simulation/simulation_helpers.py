@@ -33,29 +33,27 @@ def run_simul(nsim, N_vals, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_start 
 
     for N in N_vals:
         print(f"Running simulation for N={N}...")
-
         for _ in range(nsim):
             # Generate topic data and graph
             while True:
                 try:
                     coords_df, W, A, X = gen_model.generate_data(N, n, p, K, r)
                     weights, edge_df = gen_model.generate_weights_edge(coords_df, m, phi)
+                    # Spatial SVD (two-step)
+                    start_time = time.time()
+                    model_splsi = splsi.SpLSI(lamb_start=lamb_start, step_size=step_size, grid_len=grid_len, step="two-step", verbose=0)
+                    model_splsi.fit(X, K, edge_df, weights)
+                    time_splsi = time.time() - start_time
+                    print(f"CV Lambda is {model_splsi.lambd}")
                     break
                 except Exception as e:
-                    print(f"An error has occurred: {e}")
+                    print(f"Regenerating dataset due to error: {e}")
 
             # Vanilla SVD
             start_time = time.time()
             model_v = splsi.SpLSI(lamb_start=lamb_start, step_size=step_size, grid_len=grid_len, method="nonspatial", verbose=0)
             model_v.fit(X, K, edge_df, weights)
             time_v = time.time() - start_time
-
-            # Spatial SVD (two-step)
-            start_time = time.time()
-            model_splsi = splsi.SpLSI(lamb_start=lamb_start, step_size=step_size, grid_len=grid_len, step="two-step", verbose=0)
-            model_splsi.fit(X, K, edge_df, weights)
-            time_splsi = time.time() - start_time
-            print(f"CV Lambda is {model_splsi.lambd}")
 
             # SLDA
             start_time = time.time()
