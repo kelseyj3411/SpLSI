@@ -65,11 +65,11 @@ def run_simul(nsim, N_vals, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_start 
             P_splsi = get_component_mapping(model_splsi.W_hat.T, W)
             P_slda = get_component_mapping(model_slda.topic_weights.values.T, W)
 
-            W_hat_v = model_v.W_hat @ P_v
-            W_hat_plsi = model_splsi.W_hat @ P_splsi
+            W_hat_plsi = model_v.W_hat @ P_v
+            W_hat_splsi = model_splsi.W_hat @ P_splsi
             W_hat_slda = model_slda.topic_weights.values @ P_slda
-            err_acc_spl_v = [get_F_err(W_hat_v, W), get_accuracy(coords_df, n, W_hat_v)]
-            err_acc_spl_splsi = [get_F_err(W_hat_plsi, W), get_accuracy(coords_df, n, W_hat_plsi)]
+            err_acc_spl_v = [get_F_err(W_hat_plsi, W), get_accuracy(coords_df, n, W_hat_plsi)]
+            err_acc_spl_splsi = [get_F_err(W_hat_splsi, W), get_accuracy(coords_df, n, W_hat_splsi)]
             err_acc_spl_slda = [get_F_err(W_hat_slda, W), get_accuracy(coords_df, n, W_hat_slda)]
 
 
