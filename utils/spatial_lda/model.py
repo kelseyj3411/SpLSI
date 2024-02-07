@@ -99,7 +99,8 @@ def run_simulation(X, K, coords_df, difference_penalty=0.25,
           max_primal_dual_iter=400, max_dirichlet_iter=20, max_dirichlet_ls_iter=10,
           max_lda_iter=5, max_admm_iter=15, n_iters=3, n_parallel_processes=2, verbosity=0,
           primal_dual_mu=2, admm_rho=1.0, primal_tol=1e-3, threshold=None):
-    row_ind = [('cell',i) for i in range(1000)]
+    n = X.shape[0]
+    row_ind = [('cell',i) for i in range(n)]
     features = pd.DataFrame(X, index = row_ind)
     coords_df_ = {'cell': coords_df}
     difference_matrices = make_merged_difference_matrices(features, coords_df_, 'x','y')
