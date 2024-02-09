@@ -36,7 +36,7 @@ def spatialSVD(
 
         thres = 1
         niter = 0
-        while thres > eps:
+        while thres > eps*n:
             UUT_old = np.dot(U, U.T)
             VVT_old = np.dot(V, V.T)
 

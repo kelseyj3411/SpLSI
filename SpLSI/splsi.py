@@ -27,7 +27,7 @@ class SpLSI(object):
             lamb_start = 0.01,
             step_size = 1.15,
             grid_len = 100,
-            eps = 1e-06,
+            eps = 1e-08,
             method = "spatial",
             step = "two-step",
             return_anchor_docs = True,
