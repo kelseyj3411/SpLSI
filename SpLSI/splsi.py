@@ -16,7 +16,6 @@ from cvxpy.problems.problem import Problem
 from SpLSI import generate_topic_model as gen_model
 from SpLSI.utils import *
 from SpLSI.spatialSVD import *
-# use pycvxcluster from "https://github.com/dx-li/pycvxcluster/tree/main"
 
 
 class SpLSI(object):

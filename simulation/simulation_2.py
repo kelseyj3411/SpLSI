@@ -18,7 +18,7 @@ from cvxpy import Variable
 from cvxpy.problems.objective import Minimize
 from cvxpy.problems.problem import Problem
 
-sys.path.append('./SpLSI/pycvxcluster/src/')
+
 import pycvxcluster.pycvxclt
 
 from SpLSI import generate_topic_model as gen_model

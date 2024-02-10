@@ -19,7 +19,6 @@ from cvxpy import Variable
 from cvxpy.problems.objective import Minimize
 from cvxpy.problems.problem import Problem
 
-sys.path.append('./pycvxcluster/src/')
 import pycvxcluster.pycvxcluster
 
 from SpLSI import generate_topic_model as gen_model
@@ -28,69 +27,72 @@ from SpLSI.spatialSVD import *
 from SpLSI import splsi
 import utils.spatial_lda.model
 
-def run_simul(nsim, N_vals, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_start = 0.0001, step_size = 1.35, grid_len=30):
-    results = []
+from collections import defaultdict
 
-    for N in N_vals:
-        print(f"Running simulation for N={N}...")
-        for _ in range(nsim):
-            # Generate topic data and graph
-            while True:
-                try:
-                    coords_df, W, A, X = gen_model.generate_data(N, n, p, K, r)
-                    weights, edge_df = gen_model.generate_weights_edge(coords_df, m, phi)
-                    # Spatial SVD (two-step)
-                    start_time = time.time()
-                    model_splsi = splsi.SpLSI(lamb_start=lamb_start, step_size=step_size, grid_len=grid_len, step="two-step", verbose=0)
-                    model_splsi.fit(X, K, edge_df, weights)
-                    time_splsi = time.time() - start_time
-                    print(f"CV Lambda is {model_splsi.lambd}")
-                    break
-                except Exception as e:
-                    print(f"Regenerating dataset due to error: {e}")
+def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_start = 0.0001, step_size = 1.35, grid_len=30):
+    results = defaultdict(list)
+    temp_save_loc = os.path.join(os.getcwd(), 'temp')
+    print(f"Running simulations for N={N}, n={n}, p={p}, K={K}, r={r}, m={m}, phi={phi}...")
+    for trial in range(nsim):
+        # Generate topic data and graph
+        while True:
+            try:
+                coords_df, W, A, X = gen_model.generate_data(N, n, p, K, r)
+                weights, edge_df = gen_model.generate_weights_edge(coords_df, m, phi)
+                # Spatial SVD (two-step)
+                start_time = time.time()
+                model_splsi = splsi.SpLSI(lamb_start=lamb_start, step_size=step_size, grid_len=grid_len, step="two-step", verbose=0)
+                model_splsi.fit(X, K, edge_df, weights)
+                time_splsi = time.time() - start_time
+                print(f"CV Lambda is {model_splsi.lambd}")
+                break
+            except Exception as e:
+                print(f"Regenerating dataset due to error: {e}")
 
-            # Vanilla SVD
-            start_time = time.time()
-            model_v = splsi.SpLSI(lamb_start=lamb_start, step_size=step_size, grid_len=grid_len, method="nonspatial", verbose=0)
-            model_v.fit(X, K, edge_df, weights)
-            time_v = time.time() - start_time
+        # Vanilla SVD
+        start_time = time.time()
+        model_v = splsi.SpLSI(lamb_start=lamb_start, step_size=step_size, grid_len=grid_len, method="nonspatial", verbose=0)
+        model_v.fit(X, K, edge_df, weights)
+        time_v = time.time() - start_time
 
-            # SLDA
-            start_time = time.time()
-            model_slda = utils.spatial_lda.model.run_simulation(X, K, coords_df)
-            time_slda = time.time() - start_time
+        # SLDA
+        start_time = time.time()
+        model_slda = utils.spatial_lda.model.run_simulation(X, K, coords_df)
+        time_slda = time.time() - start_time
 
-            # Record [err, acc] for spl_v and spl_2
-            P_v = get_component_mapping(model_v.W_hat.T, W)
-            P_splsi = get_component_mapping(model_splsi.W_hat.T, W)
-            P_slda = get_component_mapping(model_slda.topic_weights.values.T, W)
+        # Record [err, acc] for spl_v and spl_2
+        P_v = get_component_mapping(model_v.W_hat.T, W)
+        P_splsi = get_component_mapping(model_splsi.W_hat.T, W)
+        P_slda = get_component_mapping(model_slda.topic_weights.values.T, W)
 
-            W_hat_plsi = model_v.W_hat @ P_v
-            W_hat_splsi = model_splsi.W_hat @ P_splsi
-            W_hat_slda = model_slda.topic_weights.values @ P_slda
-            err_acc_spl_v = [get_F_err(W_hat_plsi, W), get_accuracy(coords_df, n, W_hat_plsi)]
-            err_acc_spl_splsi = [get_F_err(W_hat_splsi, W), get_accuracy(coords_df, n, W_hat_splsi)]
-            err_acc_spl_slda = [get_F_err(W_hat_slda, W), get_accuracy(coords_df, n, W_hat_slda)]
+        W_hat_plsi = model_v.W_hat @ P_v
+        W_hat_splsi = model_splsi.W_hat @ P_splsi
+        W_hat_slda = model_slda.topic_weights.values @ P_slda
+        err_acc_spl_v = [get_F_err(W_hat_plsi, W), get_accuracy(coords_df, n, W_hat_plsi)]
+        err_acc_spl_splsi = [get_F_err(W_hat_splsi, W), get_accuracy(coords_df, n, W_hat_splsi)]
+        err_acc_spl_slda = [get_F_err(W_hat_slda, W), get_accuracy(coords_df, n, W_hat_slda)]
 
-
-            results.append({
-                'N': N,
-                'plsi_err': err_acc_spl_v[0],
-                'plsi_acc': err_acc_spl_v[1],
-                'splsi_err': err_acc_spl_splsi[0],
-                'splsi_acc': err_acc_spl_splsi[1],
-                'slda_err': err_acc_spl_slda[0],
-                'slda_acc': err_acc_spl_slda[1],
-                'time_plsi': time_v,
-                'time_splsi': time_splsi,
-                'time_slda': time_slda,
-                'model_plsi': model_v,
-                'model_splsi': model_splsi,
-                'model_slda': model_slda,
-                'spatial_lambd': model_splsi.lambd
-            })
-    #df_grouped = pd.DataFrame(results)
-
+        results['trial'].append(trial)
+        results['N'].append(N)
+        results['n'].append(n)
+        results['p'].append(p)
+        results['K'].append(K)
+        results['vanilla_err'].append(err_acc_spl_v[0])
+        results['vanilla_acc'].append(err_acc_spl_v[1])
+        results['splsi_err'].append(err_acc_spl_splsi[0])
+        results['splsi_acc'].append(err_acc_spl_splsi[1])
+        results['slda_err'].append(err_acc_spl_slda[0])
+        results['slda_acc'].append(err_acc_spl_slda[1])
+        results['time_v'].append(time_v)
+        results['time_splsi'].append(time_splsi)
+        results['time_slda'].append(time_slda)
+        results['spatial_lambd'].append(model_splsi.lambd)
+        if not os.path.exists(temp_save_loc):
+            os.makedirs(temp_save_loc)
+            pd.DataFrame(results).to_csv(os.path.join(temp_save_loc, f'simul_N={N}_n={n}_K={K}_p={p}.csv'), index=False)
+    if os.path.exists(os.path.join(temp_save_loc, f'simul_N={N}_n={n}_K={K}_p={p}.csv')):
+        os.remove(os.path.join(temp_save_loc, f'simul_N={N}_n={n}_K={K}_p={p}.csv'))
+    results = pd.DataFrame(results)
     return results
 
 def plot_fold_cv(lamb_start, step_size, grid_len, model, N):

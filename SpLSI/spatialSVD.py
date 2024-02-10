@@ -4,7 +4,7 @@ from numpy.linalg import norm, svd, solve, qr
 import networkx as nx
 
 from SpLSI.utils import *
-sys.path.append('./pycvxcluster/src/')
+
 import pycvxcluster.pycvxcluster
 # use pycvxcluster from "https://github.com/dx-li/pycvxcluster/tree/main"
 from multiprocessing import Pool
@@ -122,7 +122,7 @@ def update_U_tilde(X, V, G, weights, folds, lambd_grid, n, K):
     lambd_errs = {'fold_errors': {}, 'final_errors': []}
     XV = np.dot(X, V)
 
-    with Pool() as p:
+    with Pool(2) as p:
         results = p.starmap(lambda_search, [(j, folds, X, V, G, weights, lambd_grid) for j in folds.keys()])
     for j, errs, UL_best, lambd_best in results:
 
@@ -139,6 +139,7 @@ def update_U_tilde(X, V, G, weights, folds, lambd_grid, n, K):
 
     Q, R = qr(UL_hat_full)
     return Q, lambd_cv, lambd_errs
+
 def lambda_search(j, folds, X, V, G, weights, lambd_grid):
     fold = folds[j]
     X_tilde = interpolate_X(X, G, folds, j)
