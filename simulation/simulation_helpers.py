@@ -45,6 +45,10 @@ def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_star
                 model_splsi.fit(X, K, edge_df, weights)
                 time_splsi = time.time() - start_time
                 print(f"CV Lambda is {model_splsi.lambd}")
+                # SLDA
+                start_time = time.time()
+                model_slda = utils.spatial_lda.model.run_simulation(X, K, coords_df)
+                time_slda = time.time() - start_time
                 break
             except Exception as e:
                 print(f"Regenerating dataset due to error: {e}")
@@ -54,11 +58,6 @@ def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_star
         model_v = splsi.SpLSI(lamb_start=lamb_start, step_size=step_size, grid_len=grid_len, method="nonspatial", verbose=0)
         model_v.fit(X, K, edge_df, weights)
         time_v = time.time() - start_time
-
-        # SLDA
-        start_time = time.time()
-        model_slda = utils.spatial_lda.model.run_simulation(X, K, coords_df)
-        time_slda = time.time() - start_time
 
         # Record [err, acc] for spl_v and spl_2
         P_v = get_component_mapping(model_v.W_hat.T, W)

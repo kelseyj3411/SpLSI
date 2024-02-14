@@ -25,7 +25,10 @@ if __name__ == '__main__':
   del config
   results_dir = os.path.join(os.getcwd(), 'results')
   if not os.path.exists(results_dir):
-    os.makedirs(results_dir)
+    try:
+      os.makedirs(results_dir)
+    except:
+      pass
   msg = 'Running experiment with K={}, N={}, n={}, p={}'.format(K, N, n, p)
   os.system(f'echo {msg}')
   results = simulation_helpers.run_simul(nsim=nsim, N=N, n=n, K=K, p=p)
