@@ -13,5 +13,4 @@
 
 module load python/anaconda-2022.05
 source activate /home/danielxli/splsi_env
-cd SpLSI
 python3 run_sim.py "$SLURM_ARRAY_TASK_ID" 
