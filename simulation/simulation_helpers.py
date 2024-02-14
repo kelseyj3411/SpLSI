@@ -32,7 +32,7 @@ from collections import defaultdict
 def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_start = 0.0001, step_size = 1.35, grid_len=30):
     results = defaultdict(list)
     temp_save_loc = os.path.join(os.getcwd(), 'temp')
-    print(f"Running simulations for N={N}, n={n}, p={p}, K={K}, r={r}, m={m}, phi={phi}...")
+    #print(f"Running simulations for N={N}, n={n}, p={p}, K={K}, r={r}, m={m}, phi={phi}...")
     for trial in range(nsim):
         # Generate topic data and graph
         while True:
@@ -77,19 +77,20 @@ def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_star
         results['n'].append(n)
         results['p'].append(p)
         results['K'].append(K)
-        results['vanilla_err'].append(err_acc_spl_v[0])
-        results['vanilla_acc'].append(err_acc_spl_v[1])
+        results['plsi_err'].append(err_acc_spl_v[0])
+        results['plsi_acc'].append(err_acc_spl_v[1])
         results['splsi_err'].append(err_acc_spl_splsi[0])
         results['splsi_acc'].append(err_acc_spl_splsi[1])
         results['slda_err'].append(err_acc_spl_slda[0])
         results['slda_acc'].append(err_acc_spl_slda[1])
-        results['time_v'].append(time_v)
+        results['time_plsi'].append(time_v)
         results['time_splsi'].append(time_splsi)
         results['time_slda'].append(time_slda)
         results['spatial_lambd'].append(model_splsi.lambd)
         if not os.path.exists(temp_save_loc):
             os.makedirs(temp_save_loc)
-            pd.DataFrame(results).to_csv(os.path.join(temp_save_loc, f'simul_N={N}_n={n}_K={K}_p={p}.csv'), index=False)
+        csv_loc = os.path.join(temp_save_loc, f'simul_N={N}_n={n}_K={K}_p={p}.csv')
+        pd.DataFrame(results).tail(1).to_csv(csv_loc, index=False, mode='a', header = not os.path.exists(csv_loc))
     if os.path.exists(os.path.join(temp_save_loc, f'simul_N={N}_n={n}_K={K}_p={p}.csv')):
         os.remove(os.path.join(temp_save_loc, f'simul_N={N}_n={n}_K={K}_p={p}.csv'))
     results = pd.DataFrame(results)
