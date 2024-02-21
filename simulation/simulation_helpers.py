@@ -114,6 +114,7 @@ def plot_fold_cv(lamb_start, step_size, grid_len, model, N):
     plt.legend()
 
 
+
 def plot_one_simul(N = 100, # doc length
               n = 1000, # number of nodes
               p = 30, # vocab size
@@ -121,7 +122,8 @@ def plot_one_simul(N = 100, # doc length
               r = 0.05, # heterogeneity parameter
               m = 5, # number of neighbors to be considered in weights
               phi = 0.1, # weight parameter
-              plot_results = True
+              plot_what = False,
+              plot_topic = False
               ):
 
     # Generate topic data and graph
@@ -158,30 +160,33 @@ def plot_one_simul(N = 100, # doc length
     P_slda = get_component_mapping(model_slda.topic_weights.values.T, W)
 
     W_hat_v = model_v.W_hat @ P_v
-    W_hat_plsi = model_splsi.W_hat @ P_splsi
+    W_hat_splsi = model_splsi.W_hat @ P_splsi
     W_hat_slda = model_slda.topic_weights.values @ P_slda
-    err_acc_spl_v = [get_F_err(W_hat_v, W), get_accuracy(coords_df, 1000, W_hat_v)]
-    err_acc_spl_splsi = [get_F_err(W_hat_plsi, W), get_accuracy(coords_df, 1000, W_hat_plsi)]
-    err_acc_spl_slda = [get_F_err(W_hat_slda, W), get_accuracy(coords_df, 1000, W_hat_slda)]
+    err_acc_spl_v = [get_F_err(W_hat_v, W), get_accuracy(coords_df, n, W_hat_v)]
+    err_acc_spl_splsi = [get_F_err(W_hat_splsi, W), get_accuracy(coords_df, n, W_hat_splsi)]
+    err_acc_spl_slda = [get_F_err(W_hat_slda, W), get_accuracy(coords_df, n, W_hat_slda)]
 
-    if plot_results:
-        names = ['Ground Truth', "VanillaSVD", "spatialSVD", "SLDA"]
+    names = ['Ground Truth Topics', "SPLSI Topics", "PLSI Topics", "SLDA Topics"]
+    metrics = [err_acc_spl_splsi, err_acc_spl_v, err_acc_spl_slda]
+    Whats = [W_hat_splsi, W_hat_v, W_hat_slda]
+    times = [time_splsi, time_v, time_slda]
+
+    if plot_what:
         print(f"Model: {names[0]}")
         fig, axes = plt.subplots(1, 3, figsize=(18, 6))
         for j, ax in enumerate(axes):
             w = W[j, :]
             coords_df[f'w{j+1}'] = w
             sns.scatterplot(x='x', y='y', hue=f'w{j+1}', data=coords_df, palette='viridis', ax=ax)
-            ax.set_title(f'Original Plot {j+1}')
+            ax.set_title(f'True W {j+1}')
         plt.tight_layout()
         plt.show()
 
-        metrics = [err_acc_spl_v, err_acc_spl_splsi, err_acc_spl_slda]
-        Whats = [W_hat_v, W_hat_plsi, W_hat_slda]
         for i, metric in enumerate(metrics):
             print(f"Model: {names[i+1]}")
             print(f"Error is {metric[0]}.")
             print(f"Accuracy is {metric[1]}.")
+            print(f"Time is {times[i]}")
             What = Whats[i]
 
             # Plot the scatter plots for the model
@@ -190,11 +195,32 @@ def plot_one_simul(N = 100, # doc length
                 w = What[:, j]
                 coords_df[f'w{j+1}'] = w
                 sns.scatterplot(x='x', y='y', hue=f'w{j+1}', data=coords_df, palette='viridis', ax=ax)
-                ax.set_title(f'Plot {j+1}')
+                ax.set_title(f'What {j+1}')
             plt.tight_layout()
             plt.show()
     
-    return model_v, model_splsi, model_slda
+    if plot_topic:
+        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+        topic = np.argmax(W, axis=0)
+        coords_df['grp'] = topic
+        sns.scatterplot(x='x', y='y', hue='grp', data=coords_df, palette='viridis', ax=axes[0], legend=False)
+        axes[0].set_title(names[0], fontsize=24, fontweight='bold')
+
+        for i, metric in enumerate(metrics):
+            topic = np.argmax(Whats[i], axis=1)
+            coords_df['grp'] = topic
+            print(f"Error is {metric[0]}.")
+            print(f"Accuracy is {metric[1]}.")
+            print(f"Time is {times[i]}")
+            sns.scatterplot(x='x', y='y', hue='grp', data=coords_df, palette='viridis', ax=axes[i+1], legend=False)
+            if i == 0:  
+                axes[i+1].set_title(names[i+1], fontsize=24, fontweight='bold') 
+            else:
+                axes[i+1].set_title(names[i+1], fontsize=20)
+        plt.tight_layout()
+        plt.show()
+
+    return W, Whats
 
 def run_simul_fixed_lambda(nsim, lambd_grid, N=10, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1):
     results = []
