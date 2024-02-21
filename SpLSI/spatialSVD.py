@@ -24,8 +24,7 @@ def spatialSVD(
 ):
     n = X.shape[0]
     p = X.shape[1]
-    G, mst = get_mst(edge_df)
-    srn, fold1, fold2 = get_folds(mst)
+    srn, fold1, fold2, G, mst = get_folds_disconnected_G(edge_df)
     folds = {0:fold1, 1:fold2}
 
     lambd_grid = (lamb_start*np.power(step_size, np.arange(grid_len))).tolist()
@@ -59,7 +58,7 @@ def spatialSVD(
 
     print(f"SpatialSVD ran for {niter} steps.")
 
-    return U, L, lambd, lambd_errs
+    return U, V, L, lambd, lambd_errs
 
 
 def update_M_tilde(X, G, weights, folds, lambd_grid, n, p):

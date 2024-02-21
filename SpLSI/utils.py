@@ -14,7 +14,6 @@ import utils.spatial_lda.model
 from utils.spatial_lda.featurization import make_merged_difference_matrices
 
 
-
 def get_mst(edge_df):
     G = nx.from_pandas_edgelist(edge_df, 'src', 'tgt')
     connected_subgraphs = list(nx.connected_components(G))
@@ -34,6 +33,36 @@ def get_folds(mst):
     fold2 = [key for key, value in path.items() if value % 2 == 1]
     return srn, fold1, fold2
 
+def plot_mst(srn, fold1, fold2, G, mst):
+    pos = nx.spring_layout(G)
+    plt.figure(figsize=(8, 8))
+
+    nx.draw_networkx_edges(mst, pos, alpha=0.5)
+    nx.draw_networkx_nodes(mst, pos, node_size=30, node_color='r', nodelist=[srn])
+    nx.draw_networkx_nodes(G, pos, node_size=30, node_color='b', nodelist=set(G.nodes()) - set(fold1))
+    nx.draw_networkx_nodes(G, pos, node_size=30, node_color='orange', nodelist=fold1)
+    nx.draw_networkx_nodes(G, pos, node_size=30, node_color='blue', nodelist=fold2)
+    
+    plt.text(-0.9, 0.8, f"Fold 1: {len(fold1)} nodes", fontsize=12)
+    plt.text(-0.9, 0.7, f"Fold 2: {len(fold2)} nodes", fontsize=12)
+
+    plt.axis('off')
+    plt.show()
+
+def get_folds_disconnected_G(edge_df):
+    G = nx.from_pandas_edgelist(edge_df, 'src', 'tgt')
+    connected_subgraphs = list(nx.connected_components(G))
+    fold1 = []
+    fold2 = []
+    for graph in connected_subgraphs:
+        G_sub = G.subgraph(graph)
+        mst = nx.minimum_spanning_tree(G_sub)
+        srn = np.random.choice(mst.nodes)
+        path = get_shortest_paths(mst, srn)
+        fold1.extend([key for key, value in path.items() if value % 2 == 0])
+        fold2.extend([key for key, value in path.items() if value % 2 == 1])
+    return srn, fold1, fold2, G, mst
+
 def interpolate_X(X, G, folds, foldnum):
     fold = folds[foldnum]
     
@@ -50,38 +79,6 @@ def trunc_svd(X, K):
     L_k = np.diag(L[:K])
     VT_k = VT[:K, :]
     return U_k, L_k, VT_k.T
-
-def normaliza_coords(coords):
-    """
-    Input: pandas dataframe (n x 2) of x,y coordinates
-    Output: pandas dataframe (n x 2) of normalizaed (0,1) x,y coordinates
-    """
-    minX = min(coords['x'])
-    maxX = max(coords['x'])
-    minY = min(coords['y'])
-    maxY = max(coords['y'])
-    diaglen = np.sqrt((minX-maxX)**2+(minY-maxY)**2)
-    coords['x'] = (coords['x']-minX)/diaglen
-    coords['y'] = (coords['y']-minY)/diaglen
-    return coords.values
-
-def dist_to_exp_weight(df, coords, phi):
-    """
-    Input: 
-    - df: pandas dataframe (n x 2) of src, dst nodes 
-    - coords: pandas dataframe (n x 2) of normalizaed (0,1) x,y coordinates
-    - phi: weight parameter
-    Ouput: pandas dataframe (n x 3) of src, dst, squared exponential kernel distance
-    """
-    diff = coords.loc[df['src']].values-coords.loc[df['dst']].values
-    w =  np.exp(-0.1 * np.apply_along_axis(norm, 1, diff)**2)
-    return w
-
-def dist_to_normalized_weight(distance):
-    #dist_inv = 1/distance
-    dist_inv = distance
-    norm_dist_inv = (dist_inv-np.min(dist_inv))/(np.max(dist_inv)-np.min(dist_inv))
-    return norm_dist_inv
 
 def proj_simplex(v):
     n = len(v)
@@ -137,7 +134,7 @@ def get_CHAOS(W, nodes, coord_df, n, K):
     d_all = []
     edge_df_1NN = create_1NN_edge(coord_df)
     edge_df_1NN = edge_df_1NN.assign(
-        normalized_distance = np.apply_along_axis(norm, 1, coord_df.iloc[edge_df_1NN['src']].values - coord_df.iloc[edge_df_1NN['tgt']].values))
+        normalized_distance = np.apply_along_axis(norm, 1, coord_df.loc[edge_df_1NN['src'], ['x', 'y']].values - coord_df.loc[edge_df_1NN['tgt'], ['x', 'y']].values))
     src_nodes = edge_df_1NN['src']
     tgt_nodes = edge_df_1NN['tgt']
     distances = edge_df_1NN['normalized_distance']
@@ -164,7 +161,6 @@ def moran(W, edge_df):
     result_df = pd.merge(src_grouped, tgt_grouped, left_on='src', right_on='tgt', how='outer')
     val = result_df['cov_x'].fillna(0) + result_df['cov_y'].fillna(0)
     val_by_node = val.values
-    assert len(val_by_node) == n
     m2 = np.sum(tpc_avg**2)
     I_local = n*(val_by_node/(m2*2))
     I = np.sum(I_local)/np.sum(weights)
@@ -180,3 +176,14 @@ def get_PAS(W, edge_df):
     val = result_df['prop_x'].fillna(0) + result_df['prop_y'].fillna(0)
     pas = (val>=0.6).mean()
     return 1-pas
+
+def get_cosine_sim(A_1, A_2):
+    A_1_norm = A_1/ norm(A_1, axis=0)
+    A_2_norm = A_2/ norm(A_2, axis=0)
+    s = np.sum(np.diag(A_2_norm.T @ A_1_norm))
+    return s
+
+def get_topic_alignment(A_1, A_2):
+    P = get_component_mapping(A_1.T, A_2.T)
+    A_1 = A_1 @ P
+    return A_1

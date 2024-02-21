@@ -54,12 +54,12 @@ class SpLSI(object):
             weights
     ):
         if self.method != "spatial":
-            self.U, _, _ = trunc_svd(X, K)
+            self.U, self.L, self.V = trunc_svd(X, K)
             print("Running vanilla SVD...")
         
         else:
             print("Running spatial SVD...")
-            self.U, self.L, self.lambd, self.lambd_errs = spatialSVD(
+            self.U, self.V, self.L, self.lambd, self.lambd_errs = spatialSVD(
                                 X, 
                                 K, 
                                 edge_df, 
@@ -85,6 +85,8 @@ class SpLSI(object):
 
         H_hat = self.U[J, :]
         self.W_hat = self.get_W_hat(self.U, H_hat)
+        M = self.U @ self.V.T
+        self.A_hat = self.get_A_hat(self.W_hat, M)
 
         if self.return_anchor_docs:
             self.anchor_indices = J
@@ -120,6 +122,16 @@ class SpLSI(object):
             self._euclidean_proj_simplex(x) for x in theta
         ])
         return theta_simplex_proj
+    
+    def get_A_hat(self, W_hat, M):
+        projector = (np.linalg.inv(W_hat.T.dot(W_hat))).dot(W_hat.T)
+        theta = projector.dot(M)
+        theta_simplex_proj = np.array([
+            self._euclidean_proj_simplex(x) for x in theta
+        ])
+        return theta_simplex_proj
+
+        
     
     @staticmethod
     def _euclidean_proj_simplex(v, s=1):
