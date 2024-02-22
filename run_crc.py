@@ -12,7 +12,7 @@ import networkx as nx
 from scipy.sparse import csr_matrix
 
 # !git clone https://github.com/dx-li/pycvxcluster.git
-sys.path.append('./pycvxcluster/src/')
+sys.path.append('./pycvxcluster/')
 import pycvxcluster.pycvxcluster
 
 from SpLSI.utils import *
@@ -209,13 +209,15 @@ def run_crc(coord_df, edge_df, D, K, phi):
 
 
 if __name__ == "__main__":
-    dataset_root = "data/stanford-crc"
-    model_root = os.path.join(dataset_root, "model")
-    fig_root = os.path.join(dataset_root, "fig")
+    root_path = "data/stanford-crc"
+    dataset_root = os.path.join(root_path, "dataset")
+    model_root = os.path.join(root_path, "model")
+    fig_root = os.path.join(root_path, "fig")
     os.makedirs(model_root, exist_ok=True)
     os.makedirs(fig_root, exist_ok=True)
 
     filenames = sorted(set(f.split('.')[0] for f in os.listdir(dataset_root)))
+    if '' in filenames: filenames.remove('')
 
     for filename in filenames:
         path_to_D = os.path.join(dataset_root, "%s.D.csv" % filename)
@@ -241,7 +243,6 @@ if __name__ == "__main__":
                         phi = 0.1)
             spatial_models[ntopic] = res
         aligned_models = plot_topic(spatial_models, ntopics_list, fig_root, filename, 30)
-
 
         with open(path_to_model, 'wb') as f:
             pickle.dump(aligned_models, f)
