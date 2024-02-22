@@ -67,7 +67,7 @@ def plot_topic(spatial_models, ntopics_list, fig_root, tumor, s):
 
     names = ['SPLSI','PLSI','SLDA']
     for ntopic in ntopics_list:
-        img_output = os.path.join(fig_root, tumor+str(ntopic))
+        img_output = os.path.join(fig_root, tumor+'_'+str(ntopic))
         chaoss = spatial_models[ntopic][0]['chaoss']
         morans = spatial_models[ntopic][0]['morans']
         pas = spatial_models[ntopic][0]['pas']
