@@ -18,6 +18,7 @@ def spatialSVD(
         lamb_start,
         step_size,
         grid_len,
+        maxiter,
         eps,
         verbose,
         method
@@ -35,7 +36,7 @@ def spatialSVD(
 
         thres = 1
         niter = 0
-        while thres > eps*n:
+        while thres > eps*n and niter < maxiter:
             UUT_old = np.dot(U, U.T)
             VVT_old = np.dot(V, V.T)
 
