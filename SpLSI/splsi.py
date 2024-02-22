@@ -26,6 +26,7 @@ class SpLSI(object):
             lamb_start = 0.01,
             step_size = 1.15,
             grid_len = 100,
+            maxiter = 25,
             eps = 1e-08,
             method = "spatial",
             step = "two-step",
@@ -41,6 +42,7 @@ class SpLSI(object):
         self.lamb_start = lamb_start
         self.step_size = step_size
         self.grid_len = grid_len
+        self.maxiter = maxiter
         self.eps = eps
         self.method = method
         self.return_anchor_docs = return_anchor_docs
@@ -68,6 +70,7 @@ class SpLSI(object):
                                 self.lamb_start,
                                 self.step_size,
                                 self.grid_len,
+                                self.maxiter,
                                 self.eps,
                                 self.verbose,
                                 self.step
