@@ -11,14 +11,14 @@ ALPHA = 0.1
 BETA = 0.5
 MAXLSITER = 60
 MAXITER = 100
-#TOL = 1e-3
+# TOL = 1e-3
 ADMM_RESIDUAL_RATIO_BOUND = 4.0
 ADMM_RHO_SCALE = 2.0
 
 
 def split_gamma(gamma, n, k, l):
-    xi = np.reshape(gamma[0:n * k], [n, k])
-    chi = np.reshape(gamma[n * k: n * k + l * k], [l, k])
+    xi = np.reshape(gamma[0 : n * k], [n, k])
+    chi = np.reshape(gamma[n * k : n * k + l * k], [l, k])
     return xi, chi
 
 
@@ -43,7 +43,7 @@ def f0(gamma, e, rho, s):
     n, k = e.shape
     l = s.shape[0]
     xi, chi = split_gamma(gamma, n, k, l)
-    objective = rho / 2 * np.sum((xi - e)**2.0)
+    objective = rho / 2 * np.sum((xi - e) ** 2.0)
     objective += np.sum(scipy.sparse.diags(s, 0).dot(chi))
     return objective
 
@@ -68,8 +68,12 @@ def hessian_f0(gamma, e, rho, s):
     nabla2_xi = rho * scipy.sparse.eye(n * k)
     zeros_nk_lk = scipy.sparse.coo_matrix((n * k, l * k))
     zeros_lk_lk = scipy.sparse.coo_matrix((l * k, l * k))
-    H = scipy.sparse.vstack((scipy.sparse.hstack((nabla2_xi, zeros_nk_lk)),
-                             scipy.sparse.hstack((zeros_nk_lk.T, zeros_lk_lk))))
+    H = scipy.sparse.vstack(
+        (
+            scipy.sparse.hstack((nabla2_xi, zeros_nk_lk)),
+            scipy.sparse.hstack((zeros_nk_lk.T, zeros_lk_lk)),
+        )
+    )
     return H
 
 
@@ -81,7 +85,7 @@ def r_dual(gamma, u, C, e, rho, s):
 
 def r_cent(gamma, u, C, t):
     f1 = C.dot(gamma)
-    return -np.squeeze(scipy.sparse.diags(u, 0).dot(f1)) - 1. / t
+    return -np.squeeze(scipy.sparse.diags(u, 0).dot(f1)) - 1.0 / t
 
 
 def compute_r(gamma, u, C, e, rho, s, t):
@@ -97,15 +101,16 @@ def build_linear_system(gamma, u, C, e, rho, s, t):
     H = hessian_f0(gamma, e, rho, s)
     uC = scipy.sparse.diags(np.squeeze(u), 0).dot(C)
     Cg = scipy.sparse.diags(np.squeeze(C.dot(gamma)))
-    M = scipy.sparse.vstack((scipy.sparse.hstack((H, C.T)),
-                             scipy.sparse.hstack((-uC, -Cg)))).tocsr()
+    M = scipy.sparse.vstack(
+        (scipy.sparse.hstack((H, C.T)), scipy.sparse.hstack((-uC, -Cg)))
+    ).tocsr()
     r = compute_r(gamma, u, C, e, rho, s, t)
     return M, r
 
 
 def split_primal_dual_vars(z, n, k, l):
-    gamma = z[:n * k + l * k]
-    u = z[n * k + l * k:]
+    gamma = z[: n * k + l * k]
+    u = z[n * k + l * k :]
     return np.squeeze(gamma), np.squeeze(u)
 
 
@@ -138,8 +143,9 @@ def line_search(gamma, u, C, e, rho, s, t, l):
         new_gamma = gamma + step * dgamma
         new_u = u + step * du
         new_r = compute_r(new_gamma, new_u, C, e, rho, s, t)
-        if (np.any(C.dot(new_gamma) > 0) or
-                np.linalg.norm(new_r) > (1 - ALPHA * step) * np.linalg.norm(r)):
+        if np.any(C.dot(new_gamma) > 0) or np.linalg.norm(new_r) > (
+            1 - ALPHA * step
+        ) * np.linalg.norm(r):
             step = step * BETA
         else:
             u = new_u
@@ -147,7 +153,7 @@ def line_search(gamma, u, C, e, rho, s, t, l):
             r = new_r
             break
     if lsit == MAXLSITER - 1:
-        logging.warning('Line search failed.')
+        logging.warning("Line search failed.")
     return gamma, u, step, lsit
 
 
@@ -164,23 +170,26 @@ def primal_dual(e, rho, D, s, mu=2, verbosity=0, max_iter=MAXITER, primal_tol=1e
         nu = gap(gamma, C, u)
         t = np.max((2 * mu / nu, t * 1.2))
         gamma, u, step, lsit = line_search(gamma, u, C, e, rho, s, t, l)
-        r = np.linalg.norm(r_dual(gamma, u, C, e, rho, s)) + \
-            np.linalg.norm(r_cent(gamma, u, C, t))
+        r = np.linalg.norm(r_dual(gamma, u, C, e, rho, s)) + np.linalg.norm(
+            r_cent(gamma, u, C, t)
+        )
         if verbosity >= 3:
             logging.info(
-                f'\tPrimal Dual it: {it}, gap: {nu:.6g}, t: {t:.6g}, step: {step:.6g}, res: {r:.6g}, lsit: {lsit}')
+                f"\tPrimal Dual it: {it}, gap: {nu:.6g}, t: {t:.6g}, step: {step:.6g}, res: {r:.6g}, lsit: {lsit}"
+            )
         xis, chis = split_gamma(gamma, n, k, l)
         if r < primal_tol and nu < primal_tol:
             break
     if verbosity >= 2:
         logging.info(
-            f'\tPrimal Dual it: {it}, gap: {nu:.6g}, t: {t:.6g}, step: {step:.6g}, res: {r:.6g}, lsit: {lsit}')
+            f"\tPrimal Dual it: {it}, gap: {nu:.6g}, t: {t:.6g}, step: {step:.6g}, res: {r:.6g}, lsit: {lsit}"
+        )
 
     if it == max_iter - 1:
-        logging.warn('\tPrimal dual did not converge.')
-        with open('pd.dbg.pkl', 'wb') as f:
+        logging.warn("\tPrimal dual did not converge.")
+        with open("pd.dbg.pkl", "wb") as f:
             pickle.dump((e, rho, D, s, mu), f)
-        raise Exception('Stopping in admm.primal_dual')
+        raise Exception("Stopping in admm.primal_dual")
 
     return gamma, u
 
@@ -192,7 +201,7 @@ def li(taus, r, rho):
     taus = np.reshape(taus, (n, k))
     objective = np.sum(gammaln(taus))
     objective -= np.sum(gammaln(np.sum(taus, axis=1)))
-    objective += rho / 2 * np.sum((taus - r)**2.0)
+    objective += rho / 2 * np.sum((taus - r) ** 2.0)
     return objective
 
 
@@ -200,7 +209,7 @@ def gradient_li(taus, r, rho):
     n, k = r.shape
     r = np.reshape(r, (n, k))
     taus = np.reshape(taus, (n, k))
-    gtau = (digamma(taus) - digamma(np.sum(taus, axis=1, keepdims=True)))
+    gtau = digamma(taus) - digamma(np.sum(taus, axis=1, keepdims=True))
     gtau += rho * (taus - r)
     return np.reshape(gtau, (-1, 1))
 
@@ -228,8 +237,9 @@ def hessian_li(taus, r, rho):
     taus = np.reshape(taus, [n, k])
     blocks = []
     for i in range(n):
-        block = np.diag(
-            polygamma(1, taus[i, :]) + rho) - polygamma(1, np.sum(taus[i, :]))
+        block = np.diag(polygamma(1, taus[i, :]) + rho) - polygamma(
+            1, np.sum(taus[i, :])
+        )
         blocks.append(block)
     H = assemble_block_diag(blocks)
     return H
@@ -243,15 +253,25 @@ def get_update_step(taus, r, rho):
     z = -polygamma(1, np.sum(taus, axis=1, keepdims=True))
     iq = np.reshape(1 / q, [n, k])
     g = np.reshape(g, [n, k])
-    b = np.sum(g * iq, axis=1, keepdims=True) / \
-        (1 / z + np.sum(iq, axis=1, keepdims=True))
+    b = np.sum(g * iq, axis=1, keepdims=True) / (
+        1 / z + np.sum(iq, axis=1, keepdims=True)
+    )
     step = (g - b) * iq
     sc = np.sum(step * g)
     return np.reshape(step, [-1, 1]), sc, g
 
 
 def newton_regularized_dirichlet(
-        rho, r, max_iter=30, ls_iter=10, tol=1e-4, verbose=False, alpha=0.01, beta=0.5, verbosity=0):
+    rho,
+    r,
+    max_iter=30,
+    ls_iter=10,
+    tol=1e-4,
+    verbose=False,
+    alpha=0.01,
+    beta=0.5,
+    verbosity=0,
+):
     """Newton optimization for the regularized Dirichlet step of ADMM (see appendix section 5.2.8)."""
     n, k = r.shape
     taus = np.ones((np.prod(r.shape), 1))
@@ -269,9 +289,11 @@ def newton_regularized_dirichlet(
             new_taus = taus - t * step
             new_li = li(new_taus, r, rho)
             if verbosity >= 3:
-                logging.info(f'  Line search: {ls_it} neg.log.lik.: {new_li}'
-                             f' old neg.log.lik.:{old_li}'
-                             f' sc:{sc} t:{t}')
+                logging.info(
+                    f"  Line search: {ls_it} neg.log.lik.: {new_li}"
+                    f" old neg.log.lik.:{old_li}"
+                    f" sc:{sc} t:{t}"
+                )
             # Armijo-Goldstein condition
             if new_li > old_li - t * alpha * sc:
                 t = t * beta
@@ -281,25 +303,29 @@ def newton_regularized_dirichlet(
 
         if verbosity >= 3:
             logging.info(
-                f'\tRegularized Dirichlet iter: {it} objective: {new_li:.4g} gradient norm: {g_norm:.4g}')
+                f"\tRegularized Dirichlet iter: {it} objective: {new_li:.4g} gradient norm: {g_norm:.4g}"
+            )
         if new_li > old_li:
             logging.info(
-                f' Objective not reducing iter: {it} old: {old_li:.4g} new: {new_li:.4g}')
-            with open('nrd.dbg.pkl', 'wb') as f:
+                f" Objective not reducing iter: {it} old: {old_li:.4g} new: {new_li:.4g}"
+            )
+            with open("nrd.dbg.pkl", "wb") as f:
                 pickle.dump((rho, r), f)
-            raise Exception('Stopping in admm.newton_regularized_dirichlet.')
+            raise Exception("Stopping in admm.newton_regularized_dirichlet.")
 
         if old_li - new_li < tol:
             break
     if verbosity >= 2:
-        logging.info(f'\tRegularized Dirichlet iter: {it:} objective: {new_li:.4g}'
-                     f' gradient norm: {g_norm:.4g} sc: {sc:.4g}')
+        logging.info(
+            f"\tRegularized Dirichlet iter: {it:} objective: {new_li:.4g}"
+            f" gradient norm: {g_norm:.4g} sc: {sc:.4g}"
+        )
     if it == max_iter - 1:
-        logging.warn(' Regularized Dirichlet did not converge.')
-        logging.info(f'new_li:{new_li} old_li:{old_li}')
-        with open('nrd.dbg.pkl', 'wb') as f:
+        logging.warn(" Regularized Dirichlet did not converge.")
+        logging.info(f"new_li:{new_li} old_li:{old_li}")
+        with open("nrd.dbg.pkl", "wb") as f:
             pickle.dump((rho, r), f)
-        raise Exception('Stopping in admm.newton_regularized_dirichlet.')
+        raise Exception("Stopping in admm.newton_regularized_dirichlet.")
 
     return taus
 
@@ -314,8 +340,16 @@ def update_xis(es, rho, D, s, max_iter=100, verbosity=0, mu=2, primal_tol=1e-3):
     xis = []
     for i in range(k):
         e = es[:, [i]]
-        gamma, _ = primal_dual(e, rho, D, s, max_iter=max_iter, mu=mu,
-                               verbosity=verbosity, primal_tol=primal_tol)
+        gamma, _ = primal_dual(
+            e,
+            rho,
+            D,
+            s,
+            max_iter=max_iter,
+            mu=mu,
+            verbosity=verbosity,
+            primal_tol=primal_tol,
+        )
         xi, _ = split_gamma(gamma, n, 1, l)
         xis.append(xi)
     return np.concatenate(xis, axis=1)
@@ -327,7 +361,8 @@ def update_r(xis, v, cs, rho):
 
 def update_tau(r, rho, verbosity=0, max_iter=20, ls_iter=10):
     new_taus = newton_regularized_dirichlet(
-        rho, r, max_iter=max_iter, ls_iter=ls_iter, verbosity=verbosity)
+        rho, r, max_iter=max_iter, ls_iter=ls_iter, verbosity=verbosity
+    )
     assert np.all(new_taus > 0)
     return np.reshape(new_taus, r.shape)
 
@@ -346,10 +381,20 @@ def primal_objective(taus, cs, s, D):
     return objective
 
 
-def admm(cs, D, s, rho, verbosity=0, max_iter=15,
-         max_dirichlet_iter=20, max_dirichlet_ls_iter=10,
-         max_primal_dual_iter=400,
-         mu=2, primal_tol=1e-3, threshold=None):
+def admm(
+    cs,
+    D,
+    s,
+    rho,
+    verbosity=0,
+    max_iter=15,
+    max_dirichlet_iter=20,
+    max_dirichlet_ls_iter=10,
+    max_primal_dual_iter=400,
+    mu=2,
+    primal_tol=1e-3,
+    threshold=None,
+):
     """Performs an ADMM update to optimize per-cell topic prior Xi given LDA parameters.
 
     Reference: Modeling Multiplexed Images with Spatial-LDA Reveals Novel Tissue Microenvironments.
@@ -390,11 +435,19 @@ def admm(cs, D, s, rho, verbosity=0, max_iter=15,
         es = update_e(taus, v, rho)
         start_xis = time.time()
         xis_old, taus_old = xis, taus
-        xis = update_xis(es, rho, D, s, max_iter=max_primal_dual_iter,
-                         verbosity=verbosity, mu=mu, primal_tol=primal_tol)
+        xis = update_xis(
+            es,
+            rho,
+            D,
+            s,
+            max_iter=max_primal_dual_iter,
+            verbosity=verbosity,
+            mu=mu,
+            primal_tol=primal_tol,
+        )
         if verbosity >= 1:
             duration = time.time() - start_xis
-            logging.info(f'\tADMM Primal-Dual Fusion took:{duration:.2f} seconds')
+            logging.info(f"\tADMM Primal-Dual Fusion took:{duration:.2f} seconds")
         r = update_r(xis, v, cs, rho)
         start_tau = time.time()
         taus = update_tau(
@@ -402,15 +455,18 @@ def admm(cs, D, s, rho, verbosity=0, max_iter=15,
             rho,
             max_iter=max_dirichlet_iter,
             ls_iter=max_dirichlet_ls_iter,
-            verbosity=verbosity)
+            verbosity=verbosity,
+        )
         if verbosity >= 1:
             duration = time.time() - start_tau
             logging.info(
-                f'\tADMM Newton Regularized Dirichlet took:{duration:.2f} seconds')
+                f"\tADMM Newton Regularized Dirichlet took:{duration:.2f} seconds"
+            )
         v = update_v(v, taus, xis, rho)
         primal_residual = np.linalg.norm(taus - xis)
-        dual_residual = rho * (np.linalg.norm(xis_old - xis) +
-                               np.linalg.norm(taus_old - taus))
+        dual_residual = rho * (
+            np.linalg.norm(xis_old - xis) + np.linalg.norm(taus_old - taus)
+        )
         residual_ratio = primal_residual / dual_residual
 
         if residual_ratio > ADMM_RESIDUAL_RATIO_BOUND:
@@ -425,14 +481,16 @@ def admm(cs, D, s, rho, verbosity=0, max_iter=15,
         if verbosity >= 1:
             norm_v = np.linalg.norm(v)
             duration = time.time() - start
-            logging.info(f'\nADDM it:{i} primal res.:{primal_residual:.5g}'
-                         f' dual res.:{dual_residual:.5g}.'
-                         f' norm of v:{norm_v:.5g}'
-                         f' objective: {objective:.5g}'
-                         f' old objective: {objective_old:.5g}'
-                         f' percent change: {pct_change:.5g}'
-                         f' rho: {rho:.5f}'
-                         f' Time since start:{duration:.2f} seconds\n')
+            logging.info(
+                f"\nADDM it:{i} primal res.:{primal_residual:.5g}"
+                f" dual res.:{dual_residual:.5g}."
+                f" norm of v:{norm_v:.5g}"
+                f" objective: {objective:.5g}"
+                f" old objective: {objective_old:.5g}"
+                f" percent change: {pct_change:.5g}"
+                f" rho: {rho:.5f}"
+                f" Time since start:{duration:.2f} seconds\n"
+            )
 
         if threshold is not None:
             if pct_change < threshold:

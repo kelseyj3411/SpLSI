@@ -23,8 +23,8 @@ def make_gamma(xi, chi):
 
 
 def split_gamma(gamma, n, k, l):
-    xi = np.reshape(gamma[0:n * k], [n, k])
-    chi = np.reshape(gamma[n * k: n * k + l * k], [l, k])
+    xi = np.reshape(gamma[0 : n * k], [n, k])
+    chi = np.reshape(gamma[n * k : n * k + l * k], [l, k])
     return xi, chi
 
 
@@ -59,8 +59,7 @@ def gradient_f0(gamma, c, s):
     n, k = np.shape(c)
     l = np.shape(s)[0]
     xi, chi = split_gamma(gamma, n, k, l)
-    gxi = 1 / n * \
-        (digamma(xi) - digamma(np.sum(xi, axis=1, keepdims=True)) - c)
+    gxi = 1 / n * (digamma(xi) - digamma(np.sum(xi, axis=1, keepdims=True)) - c)
     gchi = scipy.sparse.diags(s, 0).dot(np.ones((l, k)))
     gxi = np.reshape(gxi, (n * k, 1))
     gchi = np.reshape(gchi, (l * k, 1))
@@ -90,15 +89,18 @@ def hessian_f0(gamma, n, k, l):
     xi, chi = split_gamma(gamma, n, k, l)
     blocks = []
     for i in range(n):
-        block = np.diag(polygamma(1, xi[i, :])) - \
-            polygamma(1, np.sum(xi[i, :]))
+        block = np.diag(polygamma(1, xi[i, :])) - polygamma(1, np.sum(xi[i, :]))
         blocks.append(block)
     # nabla2_xi = 1/n*scipy.sparse.block_diag(blocks)
     nabla2_xi = 1 / n * assemble_block_diag(blocks)
     zeros_nk_lk = scipy.sparse.coo_matrix((n * k, l * k))
     zeros_lk_lk = scipy.sparse.coo_matrix((l * k, l * k))
-    H = scipy.sparse.vstack((scipy.sparse.hstack((nabla2_xi, zeros_nk_lk)),
-                             scipy.sparse.hstack((zeros_nk_lk.T, zeros_lk_lk))))
+    H = scipy.sparse.vstack(
+        (
+            scipy.sparse.hstack((nabla2_xi, zeros_nk_lk)),
+            scipy.sparse.hstack((zeros_nk_lk.T, zeros_lk_lk)),
+        )
+    )
     return H
 
 
@@ -110,7 +112,7 @@ def r_dual(gamma, u, C, cs, s):
 
 def r_cent(gamma, u, C, t):
     f1 = C.dot(gamma)
-    return -np.squeeze(scipy.sparse.diags(u, 0).dot(f1)) - 1. / t
+    return -np.squeeze(scipy.sparse.diags(u, 0).dot(f1)) - 1.0 / t
 
 
 def compute_r(gamma, u, C, cs, s, t):
@@ -126,15 +128,16 @@ def build_linear_system(gamma, u, C, cs, s, t):
     H = hessian_f0(gamma, n, k, l)
     uC = scipy.sparse.diags(np.squeeze(u), 0).dot(C)
     Cg = scipy.sparse.diags(np.squeeze(C.dot(gamma)))
-    M = scipy.sparse.vstack((scipy.sparse.hstack((H, C.T)),
-                             scipy.sparse.hstack((-uC, -Cg)))).tocsr()
+    M = scipy.sparse.vstack(
+        (scipy.sparse.hstack((H, C.T)), scipy.sparse.hstack((-uC, -Cg)))
+    ).tocsr()
     r = compute_r(gamma, u, C, cs, s, t)
     return M, r
 
 
 def split_primal_dual_vars(z, n, k, l):
-    gamma = z[:n * k + l * k]
-    u = z[n * k + l * k:]
+    gamma = z[: n * k + l * k]
+    u = z[n * k + l * k :]
     return np.squeeze(gamma), np.squeeze(u)
 
 
@@ -153,8 +156,7 @@ def line_search(gamma, u, C, cs, s, t, n, l, k):
 
     neg_dgamma = dgamma < 0
     if np.any(neg_dgamma):
-        step_max = np.min(
-            (step_max, np.min(gamma[neg_dgamma] / (-dgamma[neg_dgamma]))))
+        step_max = np.min((step_max, np.min(gamma[neg_dgamma] / (-dgamma[neg_dgamma]))))
 
     step = step_max * 0.99
     r = compute_r(gamma, u, C, cs, s, t)
@@ -162,8 +164,9 @@ def line_search(gamma, u, C, cs, s, t, n, l, k):
         new_gamma = gamma + step * dgamma
         new_u = u + step * du
         new_r = compute_r(new_gamma, new_u, C, cs, s, t)
-        if (np.any(C.dot(new_gamma) > 0) or
-                np.linalg.norm(new_r) > (1 - ALPHA * step) * np.linalg.norm(r)):
+        if np.any(C.dot(new_gamma) > 0) or np.linalg.norm(new_r) > (
+            1 - ALPHA * step
+        ) * np.linalg.norm(r):
             step = step * BETA
         else:
             u = new_u
@@ -171,12 +174,11 @@ def line_search(gamma, u, C, cs, s, t, n, l, k):
             r = new_r
             break
     if lsit == MAXLSITER - 1:
-        logging.warn('Line search failed.')
+        logging.warn("Line search failed.")
     return gamma, u, step
 
 
-def primal_dual(cs, D, s, init_gamma=None,
-                init_u=None, verbose=False, tol=TOL):
+def primal_dual(cs, D, s, init_gamma=None, init_u=None, verbose=False, tol=TOL):
     l, n = D.shape
     _, k = cs.shape
     assert cs.shape[0] == D.shape[1]
@@ -196,9 +198,12 @@ def primal_dual(cs, D, s, init_gamma=None,
         gamma, u, step = line_search(gamma, u, C, cs, s, t, n, l, k)
         r = np.linalg.norm(r_dual(gamma, u, C, cs, s))
         xis, chis = split_gamma(gamma, n, k, l)
-        if (np.linalg.norm(r) < tol and nu < tol):
+        if np.linalg.norm(r) < tol and nu < tol:
             break
         if verbose:
-            logging.info('it: {0}, gap: {1}, t: {2}, step: {3}, res: {4}'.format(
-                         it, nu, t, step, np.linalg.norm(r)))
+            logging.info(
+                "it: {0}, gap: {1}, t: {2}, step: {3}, res: {4}".format(
+                    it, nu, t, step, np.linalg.norm(r)
+                )
+            )
     return gamma, u
