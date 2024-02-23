@@ -61,7 +61,7 @@ class SpLSI(object):
         
         else:
             print("Running spatial SVD...")
-            self.U, self.V, self.L, self.lambd, self.lambd_errs = spatialSVD(
+            self.U, self.V, self.L, self.lambd, self.lambd_errs, self.used_iters = spatialSVD(
                                 X, 
                                 K, 
                                 edge_df, 

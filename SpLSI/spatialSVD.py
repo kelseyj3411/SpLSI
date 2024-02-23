@@ -54,12 +54,13 @@ def spatialSVD(
             if verbose == 1:
                 print(f"Error is {thres}")
     else:
+        niter = 'N/A'
         M_tilde, lambd = update_M_tilde(X, G, weights, folds, lambd_grid, n, p)
         U, _, _ = trunc_svd(M_tilde, K)
 
     print(f"SpatialSVD ran for {niter} steps.")
 
-    return U, V, L, lambd, lambd_errs
+    return U, V, L, lambd, lambd_errs, niter
 
 
 def update_M_tilde(X, G, weights, folds, lambd_grid, n, p):

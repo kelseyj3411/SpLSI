@@ -29,12 +29,16 @@ import utils.spatial_lda.model
 
 from collections import defaultdict
 
-def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_start = 0.0001, step_size = 1.35, grid_len=30):
+def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_start = 0.0001, step_size = 1.35, grid_len=30, start_seed=None):
     results = defaultdict(list)
     temp_save_loc = os.path.join(os.getcwd(), 'temp')
     #print(f"Running simulations for N={N}, n={n}, p={p}, K={K}, r={r}, m={m}, phi={phi}...")
     for trial in range(nsim):
+        os.system(f'echo Running trial {trial}...')
         # Generate topic data and graph
+        regens = 0
+        if not (start_seed is None):
+            np.random.seed(start_seed + trial)
         while True:
             try:
                 coords_df, W, A, X = gen_model.generate_data(N, n, p, K, r)
@@ -52,6 +56,7 @@ def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_star
                 break
             except Exception as e:
                 print(f"Regenerating dataset due to error: {e}")
+                regens += 1
 
         # Vanilla SVD
         start_time = time.time()
@@ -72,6 +77,8 @@ def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_star
         err_acc_spl_slda = [get_F_err(W_hat_slda, W), get_accuracy(coords_df, n, W_hat_slda)]
 
         results['trial'].append(trial)
+        results['seed'].append(start_seed + trial)
+        results['regens'].append(regens)
         results['N'].append(N)
         results['n'].append(n)
         results['p'].append(p)
@@ -82,10 +89,12 @@ def run_simul(nsim=50, N=100, n=1000, p=30, K=3, r=0.05, m=5, phi=0.1, lamb_star
         results['splsi_acc'].append(err_acc_spl_splsi[1])
         results['slda_err'].append(err_acc_spl_slda[0])
         results['slda_acc'].append(err_acc_spl_slda[1])
-        results['time_plsi'].append(time_v)
-        results['time_splsi'].append(time_splsi)
-        results['time_slda'].append(time_slda)
+        results['plsi_time'].append(time_v)
+        results['splsi_time'].append(time_splsi)
+        results['slda_time'].append(time_slda)
         results['spatial_lambd'].append(model_splsi.lambd)
+        results['splsi_iters'].append(model_splsi.used_iters)
+
         if not os.path.exists(temp_save_loc):
             os.makedirs(temp_save_loc)
         csv_loc = os.path.join(temp_save_loc, f'simul_N={N}_n={n}_K={K}_p={p}.csv')

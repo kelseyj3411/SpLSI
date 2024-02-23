@@ -12,6 +12,12 @@ from simulation import simulation_helpers
 import numpy as np
 from sklearn.model_selection import ParameterGrid
 import pandas as pd
+#import warnings
+
+# Lazy fix for suppressing warnings
+import logging
+logging.captureWarnings(True)
+
 
 if __name__ == '__main__':
   task_id = int(sys.argv[1])
@@ -31,7 +37,7 @@ if __name__ == '__main__':
       pass
   msg = 'Running experiment with K={}, N={}, n={}, p={}'.format(K, N, n, p)
   os.system(f'echo {msg}')
-  results = simulation_helpers.run_simul(nsim=nsim, N=N, n=n, K=K, p=p)
+  results = simulation_helpers.run_simul(nsim=nsim, N=N, n=n, K=K, p=p, start_seed=500)
   results_csv_loc = os.path.join(results_dir, f'results_N={N}_n={n}_K={K}_p={p}.csv')
   results.to_csv(results_csv_loc, mode='a', header=not os.path.exists(results_csv_loc), index=False)
   os.system(f'echo Done with experiment {task_id}!')
