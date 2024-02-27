@@ -3,21 +3,22 @@ import os
 import time
 import pickle
 import numpy as np
-from numpy.linalg import norm, svd, solve, qr
+import pandas as pd
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.neighbors import NearestNeighbors
-import networkx as nx
 
 from scipy.sparse import csr_matrix
 
 # !git clone https://github.com/dx-li/pycvxcluster.git
-sys.path.append("./pycvxcluster/src/")
+sys.path.append("./pycvxcluster/")
 import pycvxcluster.pycvxcluster
+
+import logging
+logging.captureWarnings(True)
 
 from SpLSI.utils import *
 from SpLSI.spatialSVD import *
-from SpLSI.data_helpers import *
+from utils.data_helpers import *
 from SpLSI import splsi
 import utils.spatial_lda.model
 from utils.spatial_lda.featurization import make_merged_difference_matrices
@@ -223,7 +224,10 @@ def run_spleen(
     return results
 
 
+
 if __name__ == "__main__":
+    task_id = int(sys.argv[1])
+
     dataset_root = "data/spleen"
     model_root = os.path.join(dataset_root, "model")
     fig_root = os.path.join(dataset_root, "fig")

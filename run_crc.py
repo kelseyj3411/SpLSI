@@ -3,11 +3,9 @@ import os
 import time
 import pickle
 import numpy as np
-from numpy.linalg import norm, svd, solve, qr
+import pandas as pd
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.neighbors import NearestNeighbors
-import networkx as nx
 
 from scipy.sparse import csr_matrix
 
@@ -15,9 +13,12 @@ from scipy.sparse import csr_matrix
 sys.path.append("./pycvxcluster/")
 import pycvxcluster.pycvxcluster
 
+import logging
+logging.captureWarnings(True)
+
 from SpLSI.utils import *
 from SpLSI.spatialSVD import *
-from SpLSI.data_helpers import *
+from utils.data_helpers import *
 from SpLSI import splsi
 import utils.spatial_lda.model
 from utils.spatial_lda.featurization import make_merged_difference_matrices
@@ -239,8 +240,11 @@ def run_crc(coord_df, edge_df, D, K, phi):
     return results
 
 
+
 if __name__ == "__main__":
-    root_path = "data/stanford-crc"
+    task_id = int(sys.argv[1])
+
+    root_path = os.path.join(os.getcwd(), "data/stanford-crc")
     dataset_root = os.path.join(root_path, "dataset")
     model_root = os.path.join(root_path, "model")
     fig_root = os.path.join(root_path, "fig")
@@ -250,8 +254,9 @@ if __name__ == "__main__":
     filenames = sorted(set(f.split(".")[0] for f in os.listdir(dataset_root)))
     if "" in filenames:
         filenames.remove("")
+    filenames_s = filenames[task_id-1::6]
 
-    for filename in filenames:
+    for filename in filenames_s:
         path_to_D = os.path.join(dataset_root, "%s.D.csv" % filename)
         path_to_edge = os.path.join(dataset_root, "%s.edge.csv" % filename)
         path_to_coord = os.path.join(dataset_root, "%s.coord.csv" % filename)
@@ -265,7 +270,7 @@ if __name__ == "__main__":
 
         coords_df = pd.merge(coord_df, type_df).reset_index(drop=True)
 
-        ntopics_list = [3, 5]
+        ntopics_list = [3,5,7,10]
         spatial_models = {}
         for ntopic in ntopics_list:
             res = run_crc(coord_df=coords_df, edge_df=edge_df, D=D, K=ntopic, phi=0.1)
