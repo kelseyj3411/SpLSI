@@ -270,7 +270,7 @@ if __name__ == "__main__":
 
         coords_df = pd.merge(coord_df, type_df).reset_index(drop=True)
 
-        ntopics_list = [3,5,7,10]
+        ntopics_list = [2,3,5]
         spatial_models = {}
         for ntopic in ntopics_list:
             res = run_crc(coord_df=coords_df, edge_df=edge_df, D=D, K=ntopic, phi=0.1)

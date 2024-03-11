@@ -113,14 +113,10 @@ def preprocess_spleen(tumor, coord_df, edge_df, D, phi):
     return X, edge_df, coord_df, weights, n, nodes
 
 
-def run_spleen(
-    minx, maxx, miny, maxy, tumor, coord_df, edge_df, D, K, phi, plot_sub, s
-):
+def run_spleen(tumor, coord_df, edge_df, D, K, phi):
     results = []
     # X, edge_df, coord_df, weights, n, nodes = preprocess_spleen(tumor, coord_df, edge_df, D, phi)
-    X, edge_df, coord_df, weights, n, nodes = preprocess_spleen_(
-        minx, maxx, miny, maxy, tumor, coord_df, edge_df, D, phi, plot_sub, s
-    )
+    X, edge_df, coord_df, weights, n, nodes = preprocess_spleen(tumor, coord_df, edge_df, D, phi)
     # SPLSI
     start_time = time.time()
     model_splsi = splsi.SpLSI(
@@ -159,22 +155,22 @@ def run_spleen(
     time_slda = time.time() - start_time
 
     # Metrics
-    cell_dict = dict(zip(nodes, range(n)))
-    coord_df_ = coord_df.copy()
-    coord_df_.index = coord_df.index.map(cell_dict)
+    #cell_dict = dict(zip(nodes, range(n)))
+    #coord_df_ = coord_df.copy()
+    #coord_df_.index = coord_df.index.map(cell_dict)
     W_splsi = model_splsi.W_hat
     gmoran_splsi, moran_splsi = moran(W_splsi, edge_df)
-    gchaos_splsi, chaos_splsi = get_CHAOS(W_splsi, nodes, coord_df_, n, K)
+    gchaos_splsi, chaos_splsi = get_CHAOS(W_splsi, nodes, coord_df, n, K)
     pas_splsi = get_PAS(W_splsi, edge_df)
 
     W_plsi = model_plsi.W_hat
     gmoran_plsi, moran_plsi = moran(W_plsi, edge_df)
-    gchaos_plsi, chaos_plsi = get_CHAOS(W_plsi, nodes, coord_df_, n, K)
+    gchaos_plsi, chaos_plsi = get_CHAOS(W_plsi, nodes, coord_df, n, K)
     pas_plsi = get_PAS(W_plsi, edge_df)
 
     W_slda = model_slda.topic_weights.values
     gmoran_slda, moran_slda = moran(W_slda, edge_df)
-    gchaos_slda, chaos_slda = get_CHAOS(W_slda, nodes, coord_df_, n, K)
+    gchaos_slda, chaos_slda = get_CHAOS(W_slda, nodes, coord_df, n, K)
     pas_slda = get_PAS(W_slda, edge_df)
 
     # Align A_hat
@@ -241,33 +237,27 @@ if __name__ == "__main__":
     spleen_edge = pd.read_pickle(path_to_edge)
     spleen_coord = pd.read_pickle(path_to_coord)
 
-    # tumors = ['BALBc-1', 'BALBc-2', 'BALBc-3']
-    tumors = ["BALBc-1"]
+    tumors = ["BALBc-1", "BALBc-2", "BALBc-3"]
+    tumor = tumors[task_id-1]
+
     spleen_coord.columns = ["x", "y"]
     spleen_edge.columns = ["src", "tgt", "distance"]
 
-    for tumor in tumors:
-        path_to_model = os.path.join(model_root, "%s.model.pkl" % tumor)
-        ntopics_list = [3, 5, 7]
-        spatial_models = {}
-        for ntopic in ntopics_list:
-            res = run_spleen(
-                minx=0.1,
-                maxx=0.4,
-                miny=0.3,
-                maxy=0.6,
-                tumor="BALBc-1",
-                coord_df=spleen_coord,
-                edge_df=spleen_edge,
-                D=spleen_D,
-                K=ntopic,
-                phi=0.1,
-                plot_sub=False,
-                s=0.5,
-            )
-            spatial_models[ntopic] = res
-        aligned_models = plot_topic(
-            spatial_models, ntopics_list, fig_root, "BALBc-1", 15
+    path_to_model = os.path.join(model_root, "%s.model.pkl" % tumor)
+    ntopics_list = [3]
+    spatial_models = {}
+    for ntopic in ntopics_list:
+        res = run_spleen(
+            tumor=tumor,
+            coord_df=spleen_coord,
+            edge_df=spleen_edge,
+            D=spleen_D,
+            K=ntopic,
+            phi=0.1
         )
-        with open(path_to_model, "wb") as f:
-            pickle.dump(aligned_models, f)
+        spatial_models[ntopic] = res
+    aligned_models = plot_topic(
+        spatial_models, ntopics_list, fig_root, tumor, 15
+    )
+    with open(path_to_model, "wb") as f:
+        pickle.dump(aligned_models, f)

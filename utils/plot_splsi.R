@@ -23,7 +23,7 @@ ggplot(summary_stats, aes(x=N, y=mean_error, fill=method, color=method)) +
   geom_ribbon(aes(ymin = mean_error - sd_error, ymax = mean_error + sd_error), alpha = 0.3, color=NA) +
   geom_line() +
   geom_point() +
-  labs(title = "Document length (N) vs Error", 
+  labs(title = bquote(bold(Error~of~Topic~Weight~italic(W))), 
        x = "Document length (N)", 
        y = "Error") +
   #scale_color_brewer(palette="Paired") +
@@ -57,7 +57,7 @@ ggplot(summary_stats, aes(x=N, y=mean_error, fill=method, color=method)) +
   geom_ribbon(aes(ymin = mean_error - sd_error, ymax = mean_error + sd_error), alpha = 0.3, color=NA) +
   geom_line() +
   geom_point() +
-  labs(title = "Document length (N) vs Accuracy", 
+  labs(title = "Accuracy of Topic Assignment", 
        x = "Document length (N)", 
        y = "Accuracy") +
   #scale_color_brewer(palette="Paired") +
@@ -91,7 +91,7 @@ ggplot(summary_stats, aes(x=N, y=mean_error, fill=method, color=method)) +
   geom_ribbon(aes(ymin = mean_error - sd_error, ymax = mean_error + sd_error), alpha = 0.3, color=NA) +
   geom_line() +
   geom_point() +
-  labs(title = "Document length (N) vs Time", 
+  labs(title = "Running Time", 
        x = "Document length (N)", 
        y = "Time") +
   #scale_color_brewer(palette="Paired") +
@@ -118,7 +118,7 @@ ggplot(summary_stats, aes(x=N, y=mean_error)) +
   geom_ribbon(aes(ymin = mean_error - sd_error, ymax = mean_error + sd_error), fill = blue_palette[1], alpha = 0.3) +
   geom_line(color = blue_palette[1]) +
   geom_point(color = blue_palette[1]) +
-  labs(title = "Document length (N) vs Spatial penalty", 
+  labs(title = bquote(bold(Spatial~Regularization~lambda^{MST-CV})), 
        x = "Document length (N)", 
        y = "Lambda") +
   #scale_color_brewer(palette="Paired") +
