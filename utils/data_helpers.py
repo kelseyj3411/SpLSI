@@ -41,6 +41,7 @@ def normaliza_coords(coords):
     diaglen = np.sqrt((minX - maxX) ** 2 + (minY - maxY) ** 2)
     coords["x"] = (coords["x"] - minX) / diaglen
     coords["y"] = (coords["y"] - minY) / diaglen
+
     return coords[["x", "y"]].values
 
 
@@ -94,6 +95,7 @@ def plot_topic(spatial_models, ntopics_list, fig_root, tumor, s):
             )
         plt.tight_layout()
         plt.savefig(img_output, dpi=300, bbox_inches="tight")
+        plt.close()
     return aligned_models
 
 
@@ -115,6 +117,7 @@ def plot_What(What, coord_df, ntopic):
         ax.set_title(f"Original Plot {j+1}")
     plt.tight_layout()
     plt.show()
+    plt.close()
 
 
 def get_component_mapping(stats_1, stats_2):

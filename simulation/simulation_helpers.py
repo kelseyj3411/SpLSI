@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import pickle
 import numpy as np
 from numpy.linalg import norm, svd, solve, qr
 import pandas as pd
@@ -39,13 +40,19 @@ def run_simul(
     r=0.05,
     m=5,
     phi=0.1,
-    lamb_start=0.0001,
-    step_size=1.35,
-    grid_len=30,
+    lamb_start=0.001,
+    step_size=1.2,
+    grid_len=29,
     start_seed=None,
 ):
     results = defaultdict(list)
+    models = {'splsi': [], 'plsi': [], 'slda': []}
+    
     temp_save_loc = os.path.join(os.getcwd(), "temp")
+    file_base = os.path.join(temp_save_loc, f"simul_N={N}_n={n}_K={K}_p={p}")
+    extensions = ['.csv', '.pkl']
+    csv_loc = f"{file_base}{extensions[0]}"
+
     # print(f"Running simulations for N={N}, n={n}, p={p}, K={K}, r={r}, m={m}, phi={phi}...")
     for trial in range(nsim):
         os.system(f"echo Running trial {trial}...")
@@ -63,7 +70,6 @@ def run_simul(
                     lamb_start=lamb_start,
                     step_size=step_size,
                     grid_len=grid_len,
-                    step="two-step",
                     verbose=0,
                 )
                 model_splsi.fit(X, K, edge_df, weights)
@@ -100,14 +106,17 @@ def run_simul(
         W_hat_slda = model_slda.topic_weights.values @ P_slda
         err_acc_spl_v = [
             get_F_err(W_hat_plsi, W),
+            get_l1_err(W_hat_plsi, W),
             get_accuracy(coords_df, n, W_hat_plsi),
         ]
         err_acc_spl_splsi = [
             get_F_err(W_hat_splsi, W),
+            get_l1_err(W_hat_splsi, W),
             get_accuracy(coords_df, n, W_hat_splsi),
         ]
         err_acc_spl_slda = [
             get_F_err(W_hat_slda, W),
+            get_l1_err(W_hat_slda, W),
             get_accuracy(coords_df, n, W_hat_slda),
         ]
 
@@ -119,27 +128,38 @@ def run_simul(
         results["p"].append(p)
         results["K"].append(K)
         results["plsi_err"].append(err_acc_spl_v[0])
-        results["plsi_acc"].append(err_acc_spl_v[1])
+        results["plsi_l1_err"].append(err_acc_spl_v[1])
+        results["plsi_acc"].append(err_acc_spl_v[2])
         results["splsi_err"].append(err_acc_spl_splsi[0])
-        results["splsi_acc"].append(err_acc_spl_splsi[1])
+        results["splsi_l1_err"].append(err_acc_spl_splsi[1])
+        results["splsi_acc"].append(err_acc_spl_splsi[2])
         results["slda_err"].append(err_acc_spl_slda[0])
-        results["slda_acc"].append(err_acc_spl_slda[1])
+        results["slda_l1_err"].append(err_acc_spl_slda[1])
+        results["slda_acc"].append(err_acc_spl_slda[2])
         results["plsi_time"].append(time_v)
         results["splsi_time"].append(time_splsi)
         results["slda_time"].append(time_slda)
         results["spatial_lambd"].append(model_splsi.lambd)
         results["splsi_iters"].append(model_splsi.used_iters)
 
+        models['splsi'].append(model_splsi)
+        models['plsi'].append(model_v)
+        models['slda'].append(model_slda)
+
         if not os.path.exists(temp_save_loc):
             os.makedirs(temp_save_loc)
-        csv_loc = os.path.join(temp_save_loc, f"simul_N={N}_n={n}_K={K}_p={p}.csv")
         pd.DataFrame(results).tail(1).to_csv(
             csv_loc, index=False, mode="a", header=not os.path.exists(csv_loc)
         )
-    if os.path.exists(
-        os.path.join(temp_save_loc, f"simul_N={N}_n={n}_K={K}_p={p}.csv")
-    ):
-        os.remove(os.path.join(temp_save_loc, f"simul_N={N}_n={n}_K={K}_p={p}.csv"))
+        pkl_loc = f"{file_base}_trial={trial}{extensions[1]}"
+        with open(pkl_loc, "wb") as f:
+            pickle.dump(models, f)
+
+    #for ext in extensions:
+    #    file_path = f"{file_base}{ext}"
+    #    if os.path.exists(file_path):
+    #        os.remove(file_path)
+
     results = pd.DataFrame(results)
     return results
 

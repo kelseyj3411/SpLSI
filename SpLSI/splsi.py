@@ -4,7 +4,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import scipy
-from scipy.sparse import csr_matrix
+from scipy.sparse import csc_matrix
+from scipy.sparse.linalg import svds
 from scipy.optimize import linear_sum_assignment
 import networkx as nx
 
@@ -22,13 +23,13 @@ class SpLSI(object):
     def __init__(
         self,
         lambd=None,
-        lamb_start=0.01,
-        step_size=1.15,
-        grid_len=100,
+        lamb_start=0.001,
+        step_size=1.2,
+        grid_len=29,
         maxiter=25,
-        eps=1e-08,
+        eps=1e-05,
         method="spatial",
-        step="two-step",
+        use_mpi=False,
         return_anchor_docs=True,
         verbose=1,
     ):
@@ -46,11 +47,12 @@ class SpLSI(object):
         self.method = method
         self.return_anchor_docs = return_anchor_docs
         self.verbose = verbose
-        self.step = step
+        self.use_mpi = use_mpi
 
     def fit(self, X, K, edge_df, weights):
         if self.method != "spatial":
-            self.U, self.L, self.V = trunc_svd(X, K)
+            self.U, self.L, self.V = svds(X, k=K)
+            self.V = self.V.T
             print("Running vanilla SVD...")
 
         else:
@@ -74,7 +76,7 @@ class SpLSI(object):
                 self.maxiter,
                 self.eps,
                 self.verbose,
-                self.step,
+                self.use_mpi,
             )
         print("Running SPOC...")
         n = X.shape[0]
@@ -131,15 +133,12 @@ class SpLSI(object):
         (n,) = v.shape
         # check if we are already on the simplex
         if v.sum() == s and np.alltrue(v >= 0):
-            # best projection: itself!
             return v
-        # get the array of cumulative sums of a sorted (decreasing) copy of v
+        
         u = np.sort(v)[::-1]
         cssv = np.cumsum(u)
-        # get the number of > 0 components of the optimal solution
         rho = np.nonzero(u * np.arange(1, n + 1) > (cssv - s))[0][-1]
-        # compute the Lagrange multiplier associated to the simplex constraint
+       
         theta = (cssv[rho] - s) / (rho + 1.0)
-        # compute the projection by thresholding v using theta
         w = (v - theta).clip(min=0)
         return w
