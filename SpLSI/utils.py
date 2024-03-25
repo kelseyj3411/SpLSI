@@ -119,6 +119,9 @@ def get_F_err(W, W_hat):
     err = norm(W.T - W_hat, ord="fro")
     return err
 
+def get_l1_err(W, W_hat):
+    err = (abs(W.T - W_hat)).sum()
+    return err
 
 def inverse_L(L):
     d = np.diagonal(L)

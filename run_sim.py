@@ -1,5 +1,6 @@
 import sys
 import os.path
+import pickle
 
 # os.environ["OMP_NUM_THREADS"] = "1"
 # os.environ["MKL_NUM_THREADS"] = "1"
@@ -7,6 +8,7 @@ import os.path
 # os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 # os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
+sys.path.append("./pycvxcluster/")
 import pycvxcluster.pycvxcluster
 from simulation import simulation_helpers
 import numpy as np

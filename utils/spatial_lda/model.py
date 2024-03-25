@@ -163,7 +163,7 @@ def run_simulation(
         features, coords_df_, "x", "y"
     )
 
-    print("Runing SLDA...")
+    print("Running SLDA...")
     spl_lda = train(
         sample_features=features,
         difference_matrices=difference_matrices,
