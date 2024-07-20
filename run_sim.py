@@ -30,7 +30,7 @@ if __name__ == "__main__":
     K = int(config["K"])
     N = int(config["N"])
     n = int(config["n"])
-    nsim = int(config["nsim"])
+    #nsim = int(config["nsim"])
     p = int(config["p"])
     del config
     results_dir = os.path.join(os.getcwd(), "results")
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     msg = "Running experiment with K={}, N={}, n={}, p={}".format(K, N, n, p)
     os.system(f"echo {msg}")
     results = simulation_helpers.run_simul(
-        nsim=nsim, N=N, n=n, K=K, p=p, start_seed=500
+        nsim=50, N=N, n=n, K=K, p=p, start_seed=50
     )
     results_csv_loc = os.path.join(results_dir, f"results_N={N}_n={n}_K={K}_p={p}.csv")
     results.to_csv(
