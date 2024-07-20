@@ -19,9 +19,6 @@ sys.path.append("./pycvxcluster/src/")
 import pycvxcluster.pycvxcluster
 
 from SpLSI.utils import *
-from SpLSI.spatialSVD import *
-from SpLSI import splsi
-import utils.spatial_lda.model
 from utils.spatial_lda.featurization import make_merged_difference_matrices
 
 

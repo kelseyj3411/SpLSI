@@ -113,13 +113,30 @@ def generate_A(coords_df, N, n, p, K, r):
     return A
 
 
-def generate_data(N, n, p, K, r, method="strong"):
+def generate_sparse_A(coords_df, N, n, p, K, r, sparse):
+    #A = -np.log(np.random.uniform(0, 1, size=(p, K)))
+    A = np.random.uniform(0, 0.01, size=(p, K))
+    for k in range(K):
+        supp = np.random.choice(np.arange(p), p // sparse, replace=False)
+        A[supp,k] = np.random.uniform(0.1, 1, size=(len(supp), 1))
+        
+    # generate pure word
+    #cano_ind = np.random.choice(supp, K, replace=False)
+    #A[cano_ind, :] = np.eye(K)
+    A = np.apply_along_axis(lambda x: x / np.sum(x), 0, A)
+    return A
+
+
+def generate_data(N, n, p, K, r, method="strong", sparse=5):
     coords_df = generate_graph(N, n, p, K, r)
     if method == "strong":
         W = generate_W_strong(coords_df, N, n, p, K, r)
     else:
         W = generate_W(coords_df, N, n, p, K, r)
-    A = generate_A(coords_df, N, n, p, K, r)
+    if sparse > 1:
+        A = generate_sparse_A(coords_df, N, n, p, K, r, sparse)
+    else:
+        A = generate_A(coords_df, N, n, p, K, r)
     D0 = np.dot(A, W)
     D = np.apply_along_axis(sample_MN, 0, D0, N).reshape(p, n)
     assert np.sum(np.apply_along_axis(np.sum, 0, D) != N) == 0

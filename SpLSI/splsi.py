@@ -16,6 +16,7 @@ from cvxpy.problems.problem import Problem
 
 from SpLSI import generate_topic_model as gen_model
 from SpLSI.utils import *
+from temp.spatialSVD3 import *
 from SpLSI.spatialSVD import *
 
 
@@ -26,12 +27,14 @@ class SpLSI(object):
         lamb_start=0.001,
         step_size=1.2,
         grid_len=29,
-        maxiter=25,
+        maxiter=50,
         eps=1e-05,
         method="spatial",
         use_mpi=False,
         return_anchor_docs=True,
         verbose=1,
+        precondition=False,
+        initialize=True
     ):
         """
         Parameters
@@ -48,14 +51,17 @@ class SpLSI(object):
         self.return_anchor_docs = return_anchor_docs
         self.verbose = verbose
         self.use_mpi = use_mpi
+        self.precondition = precondition
+        self.initialize = initialize
 
     def fit(self, X, K, edge_df, weights):
-        if self.method != "spatial":
+        if self.method == "nonspatial":
             self.U, self.L, self.V = svds(X, k=K)
+            self.L = np.diag(self.L)
             self.V = self.V.T
             print("Running vanilla SVD...")
 
-        else:
+        elif self.method != "hooi":
             print("Running spatial SVD...")
             (
                 self.U,
@@ -77,22 +83,40 @@ class SpLSI(object):
                 self.eps,
                 self.verbose,
                 self.use_mpi,
+                self.initialize
+            )
+        else:
+            print("Running spatial HOSVD...")
+            (
+                self.U,
+                self.V,
+                self.L,
+                self.lambd,
+                self.lambd_errs,
+                self.used_iters,
+            ) = spatialSVD_ho(
+                X,
+                K,
+                edge_df,
+                weights,
+                self.lambd,
+                self.lamb_start,
+                self.step_size,
+                self.grid_len,
+                self.maxiter,
+                self.eps,
+                self.verbose,
+                self.use_mpi,
+                self.initialize
             )
         print("Running SPOC...")
-        n = X.shape[0]
-        J = []
-        S = self.preprocess_U(self.U, K).T
-        for t in range(K):
-            maxind = np.argmax(norm(S, axis=0))
-            s = np.reshape(S[:, maxind], (K, 1))
-            S1 = (np.eye(K) - np.dot(s, s.T) / norm(s) ** 2).dot(S)
-            S = S1
-            J.append(maxind)
+        J, H_hat = self.preconditioned_spa(self.U, K, self.precondition)
 
-        H_hat = self.U[J, :]
         self.W_hat = self.get_W_hat(self.U, H_hat)
         M = self.U @ self.V.T
         self.A_hat = self.get_A_hat(self.W_hat, M)
+        #M = (self.U @ self.L) @ self.V.T
+        #self.A_hat = self.get_A_hat_cvx(self.W_hat, self.U, self.L, self.V, p, K)
 
         if self.return_anchor_docs:
             self.anchor_indices = J
@@ -105,6 +129,34 @@ class SpLSI(object):
             if U[0, k] < 0:
                 U[:, k] = -1 * U[:, k]
         return U
+    
+    @staticmethod
+    def precondition_M(M, K):
+        Q = cp.Variable((K, K), symmetric=True)
+        objective = cp.Maximize(cp.log_det(Q))
+        constraints = [cp.norm(Q @ M, axis=0) <= 1]
+        prob = cp.Problem(objective, constraints)
+        prob.solve(solver=cp.SCS, verbose=False)
+        Q_value = Q.value
+        return Q_value
+    
+    def preconditioned_spa(self, U, K, precondition=True):
+        J = []
+        M = self.preprocess_U(U, K).T
+        if precondition:
+            L = self.precondition_M(M, K)
+            S = L @ M
+        else:
+            S = M
+        
+        for t in range(K):
+                maxind = np.argmax(norm(S, axis=0))
+                s = np.reshape(S[:, maxind], (K, 1))
+                S1 = (np.eye(K) - np.dot(s, s.T) / norm(s) ** 2).dot(S)
+                S = S1
+                J.append(maxind)
+        H_hat = U[J, :]
+        return J, H_hat
 
     @staticmethod
     def get_W_hat_cvx(U, H, n, K):
@@ -127,6 +179,18 @@ class SpLSI(object):
         theta = projector.dot(M)
         theta_simplex_proj = np.array([self._euclidean_proj_simplex(x) for x in theta])
         return theta_simplex_proj
+    
+    @staticmethod
+    def get_A_hat_cvx(W, U, L, V, p, K):
+        Theta = Variable((K, p))
+        constraints = [cp.sum(Theta[i, :]) == 1 for i in range(K)]
+        constraints += [Theta[i, j] >= 0 for i in range(K) for j in range(p)]
+        L = np.diag(np.diag(L))
+        M = (U @ L) @ V.T
+        obj = Minimize(cp.norm(M - W @ Theta , "fro"))
+        prob = Problem(obj, constraints)
+        prob.solve()
+        return np.array(Theta.value)
 
     @staticmethod
     def _euclidean_proj_simplex(v, s=1):

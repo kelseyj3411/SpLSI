@@ -1,4 +1,5 @@
 import time
+import random
 import numpy as np
 from numpy.linalg import norm, svd, solve, qr
 import pandas as pd
@@ -18,8 +19,8 @@ def get_mst(edge_df):
     G = nx.from_pandas_edgelist(edge_df, "src", "tgt")
     connected_subgraphs = list(nx.connected_components(G))
     mst = nx.minimum_spanning_tree(G)
-    if len(connected_subgraphs) > 1:
-        raise ValueError("Graph is not connected.")
+    #if len(connected_subgraphs) > 1:
+    #    raise ValueError("Graph is not connected.")
     return G, mst
 
 
@@ -102,11 +103,18 @@ def proj_simplex(v):
 
 def get_component_mapping(stats_1, stats_2):
     similarity = stats_1 @ stats_2.T
-    cost_matrix = -similarity
+    cost_matrix = 1-np.abs(similarity)
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
     P = np.zeros_like(cost_matrix)
     P[row_ind, col_ind] = 1
     return P
+
+def get_cosine_sim(A_1, A_2):
+    K = A_1.shape[0]
+    A_1_norm = A_1 / norm(A_1, axis=1, keepdims=True)
+    A_2_norm = A_2 / norm(A_2, axis=1, keepdims=True)
+    s = np.sum(np.diag(A_1_norm @ A_2_norm.T))
+    return s/K
 
 
 def get_accuracy(coords_df, n, W_hat):
@@ -215,15 +223,26 @@ def get_PAS(W, edge_df):
     pas = (val >= 0.6).mean()
     return 1 - pas
 
+def soft_threshold(x, thr):
+    return np.sign(x)*np.maximum(np.abs(x)-thr, 0)
 
-def get_cosine_sim(A_1, A_2):
-    A_1_norm = A_1 / norm(A_1, axis=0)
-    A_2_norm = A_2 / norm(A_2, axis=0)
-    s = np.sum(np.diag(A_2_norm.T @ A_1_norm))
-    return s
+def hard_threshold(x, thr):
+    return np.where(np.abs(x) < thr, 0, x)
 
+def get_Kfolds(n, nfolds):
+    indices = list(range(n))
+    random.shuffle(indices)
+    folds = []
+    fold_size = [n // nfolds for _ in range(nfolds)]
+    r = n % nfolds 
 
-def get_topic_alignment(A_1, A_2):
-    P = get_component_mapping(A_1.T, A_2.T)
-    A_1 = A_1 @ P
-    return A_1
+    for i in range(nfolds):
+        if i < r:
+            fold_size[i] += 1
+
+    start = 0  
+    for i in range(nfolds):
+        end = start + fold_size[i]  
+        folds.append(indices[start:end])  
+        start = end  
+    return folds
