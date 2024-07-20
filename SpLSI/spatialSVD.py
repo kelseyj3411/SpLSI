@@ -1,13 +1,13 @@
 import sys
 import random
 import numpy as np
-from numpy.linalg import norm, svd, solve, qr
+from numpy.linalg import norm, svd, solve
+from scipy.linalg import inv, sqrtm
 import networkx as nx
 
 from scipy.sparse.linalg import svds
 
 from SpLSI.utils import *
-from SpLSI import cfg
 
 import pycvxcluster.pycvxcluster
 
@@ -20,26 +20,29 @@ def spatialSVD(
     K,
     edge_df,
     weights,
-    lambd_fixed,
     lamb_start,
     step_size,
     grid_len,
     maxiter,
     eps,
     verbose,
-    use_mpi,
+    normalize,
+    L_inv_,
     initialize
 ):
     n = X.shape[0]
-    p = X.shape[1]
     srn, fold1, fold2, G, mst = get_folds_disconnected_G(edge_df)
     folds = {0: fold1, 1: fold2}
 
     lambd_grid = (lamb_start * np.power(step_size, np.arange(grid_len))).tolist()
     lambd_grid.insert(0, 1e-06)
 
+    lambd_grid_init = (0.001 * np.power(1.5, np.arange(10))).tolist()
+    lambd_grid_init.insert(0,1e-06)
+
     if initialize:
-        M, _, _ = initial_svd(X, G, weights, folds, lambd_grid)
+        print('Initializing..')
+        M, _, _ = initial_svd(X, G, weights, folds, lambd_grid_init)
         U, L, V = svds(M, k=K)
         V  = V.T
         L = np.diag(L)
@@ -51,29 +54,22 @@ def spatialSVD(
     score = 1
     niter = 0
     while score > eps and niter < maxiter:
-        # Estimate the convergence metric
         if n > 1000:
             idx = np.random.choice(range(n),1000,replace=False)
         else:
             idx = range(n)
         
         U_samp = U[idx,:]
-        UUT_old = np.dot(U_samp, U_samp.T)
-        VVT_old = np.dot(V, V.T)
+        P_U_old = np.dot(U_samp, U_samp.T)
+        P_V_old = np.dot(V, V.T)
+        X_hat_old = (P_U_old @ X) @ P_V_old
+        U, lambd, lambd_errs = update_U_tilde(X, V, L, G, weights, folds, lambd_grid, normalize, L_inv_)
+        V, L = update_V_L_tilde(X, U, normalize)
 
-        if lambd_fixed is None:
-            if use_mpi:
-                 U, lambd, lambd_errs = update_U_tilde_mpi(X, V, G, weights, folds, lambd_grid, n, K)
-            else:
-                 U, lambd, lambd_errs = update_U_tilde(X, V, L, G, weights, folds, lambd_grid, n, K)
-            V, L = update_V_L_tilde(X, U)
-        else:
-            U, lambd, lambd_errs = update_U_tilde_nocv(X, V, weights, lambd_fixed)
-            V, L = update_V_L_tilde(X, U)
-
-        UUT = np.dot(U[idx,:], U[idx,:].T)
-        VVT = np.dot(V, V.T)
-        score = np.max([(norm(UUT - UUT_old) ** 2)/UUT.shape[0], (norm(VVT - VVT_old) ** 2)/p])
+        P_U = np.dot(U[idx,:], U[idx,:].T)
+        P_V = np.dot(V, V.T)
+        X_hat = (P_U @ X) @ P_V
+        score = norm(X_hat-X_hat_old)/n
         niter += 1
         if verbose == 1:
             print(f"Error is {score}")
@@ -118,6 +114,50 @@ def lambda_search_init(j, folds, X, G, weights, lambd_grid):
     return j, errs, M_best, lambd_best
 
 
+def lambda_search(j, folds, X, V, L, G, weights, lambd_grid, normalize, L_inv_):
+    fold = folds[j]
+    X_tilde = interpolate_X(X, G, folds, j)
+    L_inv = 1/np.diag(L)
+    if L_inv_:
+        print("Taking L_inv...")
+        XVL_tinv = (X_tilde @ V) @ np.diag(L_inv)
+    else:
+        XVL_tinv = X_tilde @ V
+    X_j = X[fold, :]
+  
+    errs = []
+    best_err = float("inf")
+    U_best = None
+    lambd_best = 0
+
+    ssnal = pycvxcluster.pycvxcluster.SSNAL(verbose=0)
+
+    for fitn, lambd in enumerate(lambd_grid):
+        ssnal.gamma = lambd
+        ssnal.fit(
+            X=XVL_tinv,
+            weight_matrix=weights,
+            save_centers=True,
+            save_labels=False,
+            recalculate_weights=(fitn == 0),
+        )
+        ssnal.kwargs["x0"] = ssnal.centers_
+        ssnal.kwargs["y0"] = ssnal.y_
+        ssnal.kwargs["z0"] = ssnal.z_
+        U_tilde = ssnal.centers_.T
+        if L_inv_:
+            E = (U_tilde @ L) @ V.T
+        else:
+            E = U_tilde @ V.T
+        err = norm(X_j - E[fold, :])
+        errs.append(err)
+        if err < best_err:
+            lambd_best = lambd
+            U_best = U_tilde
+            best_err = err
+    return j, errs, U_best, lambd_best
+
+
 def initial_svd(X, G, weights, folds, lambd_grid):
     lambds_best = []
     lambd_errs = {"fold_errors": {}, "final_errors": []}
@@ -143,152 +183,22 @@ def initial_svd(X, G, weights, folds, lambd_grid):
     return M_hat, lambd_cv, lambd_errs
 
 
-def lambda_search_(j, folds, X, V, L, G, weights, lambd_grid):
-    fold = folds[j]
-    X_tilde = interpolate_X(X, G, folds, j)
-    # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
-    # assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
-    XV_tilde = (X_tilde @ V) @ np.diag(1/np.diag(L))
-    X_j = X[fold, :]
-
-    errs = []
-    best_err = float("inf")
-    U_best = None
-    lambd_best = 0
-
-    ssnal = pycvxcluster.pycvxcluster.SSNAL(verbose=0)
-
-    for fitn, lambd in enumerate(lambd_grid):
-        ssnal.gamma = lambd
-        ssnal.fit(
-            X=XV_tilde,
-            weight_matrix=weights,
-            save_centers=True,
-            save_labels=False,
-            recalculate_weights=(fitn == 0),
-        )
-        ssnal.kwargs["x0"] = ssnal.centers_
-        ssnal.kwargs["y0"] = ssnal.y_
-        ssnal.kwargs["z0"] = ssnal.z_
-        U_hat = ssnal.centers_.T
-        E = (U_hat @ L) @ V.T
-        err = norm(X_j - E[fold, :])
-        errs.append(err)
-        if err < best_err:
-            lambd_best = lambd
-            U_best = U_hat
-            best_err = err
-    return j, errs, U_best, lambd_best
-
-
-def lambda_search(j, folds, X, V, L, G, weights, lambd_grid):
-    fold = folds[j]
-    X_tilde = interpolate_X(X, G, folds, j)
-    # print((X_tilde[fold[j],:]==X[fold[j],:]).sum()) # shouldn't be large
-    # assert((X_tilde[fold[j],:]==X[fold[j],:]).sum()<=1)
-    XV_tilde = np.dot(X_tilde, V)
-    X_j = X[fold, :]
-
-    errs = []
-    best_err = float("inf")
-    UL_best = None
-    lambd_best = 0
-
-    ssnal = pycvxcluster.pycvxcluster.SSNAL(verbose=0)
-
-    for fitn, lambd in enumerate(lambd_grid):
-        ssnal.gamma = lambd
-        ssnal.fit(
-            X=XV_tilde,
-            weight_matrix=weights,
-            save_centers=True,
-            save_labels=False,
-            recalculate_weights=(fitn == 0),
-        )
-        ssnal.kwargs["x0"] = ssnal.centers_
-        ssnal.kwargs["y0"] = ssnal.y_
-        ssnal.kwargs["z0"] = ssnal.z_
-        UL_hat = ssnal.centers_.T
-        E = np.dot(UL_hat, V.T)
-        err = norm(X_j - E[fold, :])
-        errs.append(err)
-        if err < best_err:
-            lambd_best = lambd
-            UL_best = UL_hat
-            best_err = err
-    return j, errs, UL_best, lambd_best
-
-def update_U_tilde_nocv(X, V, weights, lambd):
-    XV = np.dot(X, V)
-    ssnal = pycvxcluster.pycvxcluster.SSNAL(gamma=lambd, verbose=0)
-    ssnal.fit(X=XV, weight_matrix=weights, save_centers=True)
-
-    U_hat = ssnal.centers_.T
-    E = np.dot(U_hat, V.T)
-    err = norm(X - E)
-
-    Q, R = qr(U_hat)
-    return Q, lambd, err
-
-    
-def update_U_tilde_mpi(X, V, G, weights, folds, lambd_grid, n, K):
-
-    UL_best_comb = np.zeros((n, K))
-    lambd_errs = {"fold_errors": {}, "final_errors": []}
-    XV = np.dot(X, V)
-
-    tasks = None
-    if cfg.rank == 0:
-        tasks = [(j, folds, X, V, G, weights, lambd_grid) for j in folds.keys()]
-
-    if cfg.rank == 0 and len(tasks) < cfg.nproc:
-        print("Number of tasks smaller than size.")
-        tasks += [None] * (cfg.nproc - len(tasks))
-
-    task = cfg.comm.scatter(tasks, root=0)
-
-    if task is not None:
-        j, errs, UL_best, lambd_best = lambda_search(*task)
-        result = (j, errs, UL_best, lambd_best)
-    else:
-        result = None
-
-    print("Gathering results...")
-    results = cfg.comm.gather(result, root=0)
-
-    if cfg.rank == 0:
-        results = [res for res in results if res is not None]
-        for j, errs, UL_best, lambd_best in results:
-            lambd_errs["fold_errors"][j] = errs
-            UL_best_comb[folds[j], :] = UL_best[folds[j], :]
-
-        cv_errs = np.add(lambd_errs["fold_errors"][0], lambd_errs["fold_errors"][1])
-        lambd_cv = lambd_grid[np.argmin(cv_errs)]
-
-        ssnal = pycvxcluster.pycvxcluster.SSNAL(gamma=lambd_cv, verbose=0)
-        ssnal.fit(X=XV, weight_matrix=weights, save_centers=True)
-        UL_hat_full = ssnal.centers_.T
-
-        Q, R = qr(UL_hat_full)
-        print("This is main rank.")
-        return Q, lambd_cv, lambd_errs
-    else:
-        print("This is not main rank.")
-        return None, None, None
-
-
-def update_U_tilde(X, V, L, G, weights, folds, lambd_grid, n, K):
+def update_U_tilde(X, V, L, G, weights, folds, lambd_grid, normalize, L_inv_):
     lambds_best = []
     lambd_errs = {"fold_errors": {}, "final_errors": []}
-    #XV = (X @ V) @ np.diag(np.diag(L)) 
-    XV = X @ V
+    L_inv = 1/np.diag(L)
+    if L_inv_:
+        XVL_inv = (X @ V) @ np.diag(L_inv)
+    else:
+        XVL_inv = X @ V
 
     with Pool(2) as p:
         results = p.starmap(
             lambda_search,
-            [(j, folds, X, V, L, G, weights, lambd_grid) for j in folds.keys()],
+            [(j, folds, X, V, L, G, weights, lambd_grid, normalize, L_inv_) for j in folds.keys()],
         )
-    for j, errs, _, lambd_best in results:
+    for result in results:
+        j, errs, _, lambd_best = result
         lambd_errs["fold_errors"][j] = errs
         lambds_best.append(lambd_best)
 
@@ -296,17 +206,25 @@ def update_U_tilde(X, V, L, G, weights, folds, lambd_grid, n, K):
     lambd_cv = lambd_grid[np.argmin(cv_errs)]
 
     ssnal = pycvxcluster.pycvxcluster.SSNAL(gamma=lambd_cv, verbose=0)
-    ssnal.fit(X=XV, weight_matrix=weights, save_centers=True)
-    U_hat_full = ssnal.centers_.T
+    ssnal.fit(X=XVL_inv, weight_matrix=weights, save_centers=True)
+    U_tilde = ssnal.centers_.T
 
-    Q, R = qr(U_hat_full)
+    if normalize:
+        print('Normalizing...')
+        U_hat = U_tilde @ sqrtm((inv(U_tilde.T @ U_tilde)))
+    else:
+        print('Taking QR...')
+        U_hat, R = qr(U_tilde)
     print(f"Optimal lambda is {lambd_cv}...")
-    return Q, lambd_cv, lambd_errs
+    return U_hat, lambd_cv, lambd_errs
 
 
-def update_V_L_tilde(X, U_tilde):
-    V_hat = np.dot(X.T, U_tilde)
-    Q, R = qr(V_hat)
-    #L = np.diag(np.diag((U_tilde.T @ X) @ V_hat))
-    # L = np.diag(np.diag(R))
-    return Q, R
+def update_V_L_tilde(X, U_tilde, normalize):
+    V_mul = np.dot(X.T, U_tilde)
+    if normalize:
+        V_hat, L_hat, _ = svd(V_mul, full_matrices=False)
+        L_hat = np.diag(L_hat)
+    else:
+        V_hat, L_hat = qr(V_mul)
+        L_hat = np.diag(np.diag(L_hat))
+    return V_hat, L_hat
